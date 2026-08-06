@@ -1,0 +1,10 @@
+{
+  "program_name": "AegisScope Safe Demo",
+  "target_host": "demo.invalid",
+  "allowlist": [
+    "demo.invalid"
+  ],
+  "denylist": [],
+  "program_rules": "Offline demonstration only. No target network request is authorized. The generated result must remain a dry-run proposal.",
+  "objective": "Propose a minimal basic-observation stage without sending any request."
+}

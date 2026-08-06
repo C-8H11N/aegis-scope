@@ -1,0 +1,27 @@
+name: Bug report / 缺陷报告
+description: Report a non-sensitive AegisScope defect / 报告不含敏感信息的缺陷
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include real targets, secrets, or vulnerability evidence. / 不要包含真实目标、秘密或漏洞证据。"
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description / 描述
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction / 安全复现
+      description: Use synthetic data, loopback, or .invalid only.
+    validations:
+      required: true
