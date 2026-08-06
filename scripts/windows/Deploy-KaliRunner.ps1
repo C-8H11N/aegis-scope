@@ -30,7 +30,7 @@ if ($LASTEXITCODE -ne 0) { throw "Remote directory initialization failed" }
 
 & scp (Join-Path $repoRoot "pyproject.toml") "${SshAlias}:$remoteApp/pyproject.toml"
 if ($LASTEXITCODE -ne 0) { throw "pyproject.toml upload failed" }
-& scp (Join-Path $repoRoot "README.md") (Join-Path $repoRoot "README.zh-CN.md") (Join-Path $repoRoot "LICENSE") "${SshAlias}:$remoteApp/"
+& scp (Join-Path $repoRoot "README.md") (Join-Path $repoRoot "README.en.md") (Join-Path $repoRoot "LICENSE") "${SshAlias}:$remoteApp/"
 if ($LASTEXITCODE -ne 0) { throw "Documentation upload failed" }
 & scp -r (Join-Path $repoRoot "src") "${SshAlias}:$remoteApp/"
 if ($LASTEXITCODE -ne 0) { throw "Source upload failed" }
