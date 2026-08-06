@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 180" role="img" aria-labelledby="title desc">
+  <title id="title">AegisScope</title>
+  <desc id="desc">Authorization-first security orchestration</desc>
+  <defs>
+    <linearGradient id="shield" x1="24" y1="18" x2="156" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D6FF"/>
+      <stop offset="1" stop-color="#6E7CFF"/>
+    </linearGradient>
+    <linearGradient id="word" x1="190" y1="45" x2="690" y2="125" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFF7FF"/>
+      <stop offset="1" stop-color="#91A7C4"/>
+    </linearGradient>
+  </defs>
+  <path d="M90 10 20 38v48c0 45.6 27.2 75.3 70 86.8 42.8-11.5 70-41.2 70-86.8V38L90 10Z" fill="#0B1629" stroke="url(#shield)" stroke-width="7"/>
+  <circle cx="90" cy="84" r="33" fill="none" stroke="url(#shield)" stroke-width="7"/>
+  <path d="M90 40v22M90 106v22M46 84h22M112 84h22" stroke="url(#shield)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="90" cy="84" r="8" fill="#58E6C2"/>
+  <text x="190" y="99" fill="url(#word)" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="-3">AegisScope</text>
+  <text x="194" y="137" fill="#54D7F6" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="4">AUTHORIZATION-FIRST ORCHESTRATION</text>
+</svg>

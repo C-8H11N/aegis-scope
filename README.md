@@ -1,115 +1,234 @@
-# AegisScope
+<div align="center">
+  <img src="docs/assets/aegisscope-logo.svg" width="620" alt="AegisScope — authorization-first security orchestration">
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+  <p><strong>A bilingual, authorization-first control plane for lawful SRC and bug-bounty workflows.</strong></p>
+  <p>Windows orchestration · constrained Kali runner · deterministic safety policy · human approval</p>
 
-**Authorization-first SRC security assessment orchestration.**
+  <p>
+    <a href="README.md"><strong>English</strong></a>
+    ·
+    <a href="README.zh-CN.md">简体中文</a>
+  </p>
 
-AegisScope is a defensive workflow agent for authorized SRC and bug-bounty research. It
-separates a Windows control plane from a constrained Kali runner and treats scope, rate
-limits, approval, evidence minimization, and stop conditions as executable policy.
+  <p>
+    <a href="https://github.com/C-8H11N/aegis-scope/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/C-8H11N/aegis-scope/actions/workflows/ci.yml/badge.svg"></a>
+    <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
+    <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Control_Plane-009688?logo=fastapi&logoColor=white">
+    <img alt="Windows and Kali" src="https://img.shields.io/badge/Runtime-Windows_%2B_Kali-5865F2">
+    <img alt="Authorization first" src="https://img.shields.io/badge/Safety-Authorization_First-21B97A">
+    <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/License-Apache--2.0-D22128?logo=apache"></a>
+  </p>
+</div>
 
-> Alpha safety boundary: the model may propose work, but it cannot grant authorization,
-> expand scope, or send arbitrary shell commands to Kali.
+<p align="center">
+  <img src="docs/assets/dashboard-preview.svg" width="100%" alt="AegisScope bilingual dashboard preview">
+</p>
+
+> [!IMPORTANT]
+> AegisScope is not an autonomous attack agent. Connecting a model API does not grant target authorization. The model can only create proposals; deterministic policy and an explicit user approval control every executable stage.
+
+## One-click start on Windows
+
+1. Download or clone this repository.
+2. Double-click **[`Start-AegisScope.cmd`](Start-AegisScope.cmd)**.
+3. On the first run, review and accept the isolated `.venv` dependency setup prompt.
+4. The dashboard opens automatically at [`http://127.0.0.1:8765`](http://127.0.0.1:8765).
+5. Press `Ctrl+C` in the launcher window to stop the service.
+
+The first run creates an isolated virtual environment inside the repository and installs the project there. It does not replace or repair system Python, modify Windows networking, connect to Kali, or contact an SRC target. Later launches are one click.
+
+```text
+Start-AegisScope.cmd
+        │
+        ├─ first run → ask once → create .venv → install AegisScope
+        └─ later runs ──────────→ start loopback Web UI → open browser
+```
+
+## Why AegisScope?
+
+AI can improve planning, evidence triage, and report drafting, but it must not decide its own authorization. AegisScope separates those responsibilities into two layers:
+
+- The **proposal layer** can reason about program rules and create a reviewable plan.
+- The **policy layer** enforces exact scope, fixed methods, conservative limits, expiry, stop conditions, and explicit authorization.
+
+The Windows control plane prepares and audits work. The Kali runner validates the same immutable manifest again before any allowed execution. Neither side accepts arbitrary model-generated shell commands.
+
+## Dashboard
+
+The local bilingual dashboard provides:
+
+- Chinese/English language switching and light/dark themes;
+- loopback control-plane, model configuration, runner configuration, and audit status;
+- JSON import and deterministic stage-manifest validation;
+- local job preparation only after policy validation succeeds;
+- a SQLite-backed audit list;
+- explicit wording that local preparation does not dispatch to Kali or contact a target.
+
+The dashboard intentionally has **no direct target-execution button**.
+
+## Core capabilities
+
+| Area | Implemented behavior |
+|---|---|
+| Scope | Exact-host allowlist and denylist; no implicit subdomain or asset expansion |
+| Contracts | Strict Pydantic models; unknown fields and unsafe URL forms are rejected |
+| HTTP boundary | HTTPS `HEAD`, `GET`, and `OPTIONS` only |
+| Rate limits | Concurrency `1`, delay `≥5s`, stage cap `≤20`, per-URL cap `≤2` |
+| Network safety | No redirect following, authentication, cookies, tokens, bodies, or custom headers |
+| Approval | Stage-scoped, time-bounded, exact user authorization statement |
+| Model API | OpenAI-compatible proposal adapter with no execution authority |
+| Evidence | Sensitive header/text redaction and bounded response collection |
+| Audit | Local SQLite job history plus structured runner output |
+| Transport | Fixed OpenSSH/SCP argument arrays; no `shell=True` and no arbitrary shell channel |
 
 ## Architecture
 
-```text
-Windows control plane                       Kali runner
----------------------                       -----------
-Web UI / CLI                                Manifest validator
-LLM proposal adapter       SSH/SCP           Fixed stage registry
-Scope and policy engine  ------------->      Low-impact HTTP executor
-Human stage approval     <-------------      Redacted evidence
-SQLite audit trail                          JSONL progress + summary
-Evidence analysis
+```mermaid
+flowchart LR
+    U["Human reviewer"] -->|"rules + exact scope"| W["Windows control plane"]
+    M["OpenAI-compatible API"] -->|"unapproved proposal"| W
+    W --> P{"Deterministic policy gate"}
+    P -->|"denied"| R["Review and revise"]
+    P -->|"authorized manifest"| T["Fixed SSH/SCP transport"]
+    T --> K["Constrained Kali runner"]
+    K --> P2{"Second policy validation"}
+    P2 -->|"safe stage only"| E["Bounded low-impact executor"]
+    E --> D["Redacted evidence"]
+    D --> W
 ```
 
-The MVP uses the system OpenSSH client. No daemon or new listening port is required on
-Kali. Both ends validate the same manifest before a network action can run.
+No daemon or new listening port is required on Kali. The Windows app listens on loopback only.
 
-## What is implemented
+## Safety boundary
 
-- Strict Pydantic stage contracts with unknown fields rejected.
-- Exact-host allowlist and denylist checks.
-- HTTPS-only `HEAD`, `GET`, and `OPTIONS` requests.
-- Fixed concurrency of one, minimum five-second delay, request and response caps.
-- Default dry-run and a second explicit execution gate on the Kali runner.
-- Cross-host redirect, `403`, `429`, `5xx`, login/captcha, timeout, and secret stops.
-- Sensitive-header and response-text redaction.
-- SQLite job audit trail on the control plane.
-- FastAPI control API and Typer CLI.
-- OpenAI-compatible planner adapter that creates unapproved proposals only.
-- SSH/SCP transport that invokes a fixed runner module with `shell=False`.
+### Supported
 
-## Deliberately not implemented
+- Offline rule parsing, scope review, evidence redaction, comparison, and report drafting;
+- strict manifest validation and local audit preparation;
+- explicitly authorized, low-impact stage types supported by the fixed runner;
+- dry-run demonstrations using the reserved `.invalid` namespace.
 
-- Port or subdomain scanning.
-- Crawling, fuzzing, directory brute force, password testing, or credential attacks.
-- Automatic exploitation, webshells, persistence, privilege escalation, or data extraction.
-- Arbitrary shell commands generated by a model.
-- Automatic scope expansion or redirect following.
+### Deliberately unsupported
 
-## Quick start on Windows
+- port scanning, subdomain enumeration, crawling, fuzzing, or directory brute force;
+- password testing, credential attacks, bulk access, or data extraction;
+- automatic exploitation, webshells, persistence, privilege escalation, or denial of service;
+- scope expansion, cross-host redirect following, or arbitrary shell execution;
+- unattended target testing based only on a domain or an API connection.
+
+See [Security model](docs/security-model.md) and [Security policy](SECURITY.md).
+
+## Requirements
+
+### Windows control plane
+
+- Windows 10/11;
+- Python 3.11 or newer available as `python` in a normal terminal;
+- PowerShell 5.1 or newer;
+- OpenSSH client only when a separately authorized Kali dispatch is needed.
+
+### Kali runner
+
+- Python 3.11 or newer;
+- an isolated environment under `~/src-runner`;
+- SSH access configured by the user.
+
+Kali deployment is optional for the dashboard, local validation, dry-run, and report work.
+
+## Manual setup
+
+If you prefer not to use the launcher:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 aegisscope init
-aegisscope validate .\examples\safe-demo\stage.json
 aegisscope serve
 ```
 
-Open `http://127.0.0.1:8765`. The Web API prepares and audits manifests but does not
-dispatch them automatically.
+Open `http://127.0.0.1:8765`.
 
-## Kali runner installation
-
-Install into an isolated virtual environment under `~/src-runner`; do not modify Kali's
-system Python:
-
-```bash
-mkdir -p ~/src-runner/app ~/src-runner/input ~/src-runner/output ~/src-runner/logs
-python3 -m venv ~/src-runner/venv
-~/src-runner/venv/bin/python -m pip install ./aegis-scope
-```
-
-The supplied Windows deployment script packages and uploads the project only when the user
-explicitly runs it. It never reads an SSH private key directly.
-
-## Safe demo
-
-`examples/safe-demo/stage.json` targets the reserved `.invalid` namespace and is permanently
-dry-run. It is suitable for contract and runner tests without network access.
+Useful offline commands:
 
 ```powershell
+aegisscope validate .\examples\safe-demo\stage.json
 aegisscope runner-dry-run .\examples\safe-demo\stage.json
+aegisscope report-template --language en --output report.md
 ```
 
-## Real-stage lifecycle
-
-1. Import the official program rules and exact scope.
-2. Generate a proposal using a configured API or create one manually.
-3. Review the exact URLs, methods, limits, stop conditions, and exclusions.
-4. Record a user authorization statement in a manifest.
-5. Prepare the job on Windows.
-6. Dispatch once through the fixed SSH transport.
-7. Kali validates again, executes conservatively, and returns redacted evidence.
-8. Review the evidence manually before calling anything a vulnerability.
-
-Connecting an API does not authorize a target. A domain alone is insufficient input.
+The included demo targets `example.invalid` and remains `dry_run: true`.
 
 ## Configuration
 
-Use environment variables or a local `.env` file that is excluded by Git. Never put API
-keys, SSH private keys, cookies, tokens, real scope files, or collected evidence in the
-repository. See `.env.example` for names only.
+Copy `.env.example` to a local `.env`. That file is ignored by Git.
 
-## Status
+| Variable | Purpose | Default |
+|---|---|---|
+| `AEGISSCOPE_DATA_DIR` | Local audit, jobs, proposals, and evidence | `./var` |
+| `AEGISSCOPE_SSH_ALIAS` | Existing OpenSSH alias for the Kali node | `kali-src` |
+| `AEGISSCOPE_REMOTE_ROOT` | Constrained remote workspace | `~/src-runner` |
+| `AEGISSCOPE_LANGUAGE` | CLI language: `zh-CN` or `en` | `zh-CN` |
+| `AEGISSCOPE_LLM_BASE_URL` | OpenAI-compatible API base URL | unset |
+| `AEGISSCOPE_LLM_API_KEY` | API credential, local only | unset |
+| `AEGISSCOPE_LLM_MODEL` | Model identifier | unset |
 
-Version `0.1.0` is an offline-first MVP. Run contract, policy, dry-run, and local mock tests
-before enabling the network gate. See `SECURITY.md` and `docs/security-model.md`.
+Never commit API keys, SSH private keys, cookies, tokens, real scope files, user data, or collected evidence.
+
+## Repository layout
+
+```text
+aegis-scope/
+├── Start-AegisScope.cmd       # Windows one-click launcher
+├── src/aegisscope/
+│   ├── web/                   # FastAPI control plane + dashboard
+│   ├── policy/                # Deterministic authorization gate
+│   ├── runner/                # Constrained Kali executor
+│   ├── transport/             # Fixed SSH/SCP transport
+│   ├── providers/             # Proposal-only model adapters
+│   └── contracts/             # Strict shared schemas
+├── scripts/windows/           # Setup, launch, deploy, and dispatch helpers
+├── examples/safe-demo/        # Permanent offline dry-run
+├── tests/                     # Policy, runner, Web, redaction, transport tests
+└── docs/                      # Architecture and security documentation
+```
+
+## API surface
+
+Interactive documentation is available at `/docs` while the local service is running.
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | Local control-plane health and version |
+| `GET /api/v1/config` | Non-secret configuration status |
+| `POST /api/v1/manifests/validate` | Deterministic validation, no dispatch |
+| `POST /api/v1/jobs/prepare` | Store a validated job locally |
+| `GET /api/v1/jobs` | Read local audit records |
+| `POST /api/v1/proposals` | Create an unapproved model proposal |
+
+## Development
+
+```powershell
+python -m pip install -e ".[dev]"
+ruff check .
+mypy src
+pytest --cov=aegisscope
+```
+
+Pull requests are welcome. Read [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), and the repository [AGENTS.md](AGENTS.md) before changing safety-critical code.
+
+## Project status
+
+AegisScope is an alpha, offline-first foundation. The current focus is policy correctness, reviewability, evidence minimization, and an understandable operator experience—not increasing automation intensity.
+
+Planned work:
+
+- signed manifest handoff and integrity verification;
+- richer offline evidence review and report workflows;
+- role-aware local approval records;
+- improved mock-server and end-to-end safety tests;
+- packaged Windows releases after the policy interface stabilizes.
 
 ## License
 
-Apache-2.0. This license does not replace program authorization or applicable law.
+[Apache License 2.0](LICENSE). The license does not replace target authorization, program rules, or applicable law.

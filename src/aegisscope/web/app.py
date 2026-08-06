@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from aegisscope import __version__
 from aegisscope.config import Settings
@@ -15,34 +17,7 @@ from aegisscope.i18n import MESSAGES
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner
 
-HOME_PAGE = """<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AegisScope</title>
-  <style>
-    :root { color-scheme: dark; font-family: Inter, Segoe UI, sans-serif; }
-    body { max-width: 920px; margin: 0 auto; padding: 48px 24px; background:#08111f; color:#dbeafe; }
-    h1 { font-size: 44px; margin-bottom: 8px; }
-    .tag { color:#67e8f9; font-weight:600; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:28px; }
-    .card { border:1px solid #1e3a5f; border-radius:16px; padding:20px; background:#0b1b30; }
-    code { color:#a5f3fc; }
-    a { color:#67e8f9; }
-  </style>
-</head>
-<body>
-  <div class="tag">Authorization-first security orchestration</div>
-  <h1>AegisScope</h1>
-  <p>授权优先的 SRC 安全测试编排 / Authorization-first SRC assessment orchestration.</p>
-  <div class="grid">
-    <section class="card"><h2>中文</h2><p>模型只能生成待审批提案；范围、速率和执行权限由确定性策略控制。</p></section>
-    <section class="card"><h2>English</h2><p>The model proposes work. Deterministic policy and explicit approval control execution.</p></section>
-    <section class="card"><h2>API</h2><p><a href="/docs">OpenAPI documentation</a><br><code>GET /health</code></p></section>
-  </div>
-</body>
-</html>"""
+STATIC_DIR = Path(__file__).with_name("static")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -53,10 +28,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description="Authorization-first SRC orchestration / 授权优先的 SRC 编排",
         version=__version__,
     )
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def home() -> str:
-        return HOME_PAGE
+    @app.get("/", response_class=FileResponse, include_in_schema=False)
+    def home() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/health")
     def health() -> dict[str, Any]:

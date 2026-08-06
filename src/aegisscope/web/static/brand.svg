@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">AegisScope</title>
+  <desc id="desc">A geometric shield with a scope reticle</desc>
+  <defs>
+    <linearGradient id="g" x1="9" y1="7" x2="53" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D6FF"/>
+      <stop offset="1" stop-color="#6E7CFF"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 3 7 13v17c0 16.3 9.7 26.9 25 31 15.3-4.1 25-14.7 25-31V13L32 3Z" fill="#0B1629" stroke="url(#g)" stroke-width="3"/>
+  <circle cx="32" cy="30" r="12" fill="none" stroke="url(#g)" stroke-width="3"/>
+  <path d="M32 14v8M32 38v8M16 30h8M40 30h8" stroke="url(#g)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="30" r="3" fill="#58E6C2"/>
+</svg>
