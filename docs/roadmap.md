@@ -13,12 +13,15 @@
 - Completed: write-once evidence, hashed index, and bounded offline candidate analysis / 已完成不可覆盖证据、哈希索引和有界离线候选分析；
 - Completed: transfer failure recovery without automatic request replay / 已完成不自动重放请求的传输失败恢复；
 - Completed: deterministic mocked HTTP scenarios for runner stop and redaction behavior / 已完成 Runner 停止与脱敏行为的确定性模拟 HTTP 场景；
-- Next: Ed25519 authorization signatures, evidence diffing, and duplicate detection / 下一步：Ed25519 授权签名、证据差异分析与重复检测。
+- Completed: cross-capture evidence diffing and duplicate hints / 已完成跨流量证据差异分析与重复线索；
+- Next: Ed25519 authorization signatures / 下一步：Ed25519 授权签名。
 
 ## 0.3 - Analyst workflow / 分析员工作流
 
-- Burp export ingestion and redaction / Burp 导出导入与脱敏；
-- Finding lifecycle and bilingual report renderer / 疑似问题生命周期与双语报告渲染；
+- Completed: HAR/Burp export ingestion and redaction-before-persistence / 已完成 HAR/Burp 导出导入与落盘前脱敏；
+- Completed: endpoint/role diffing and same-code duplicate clustering / 已完成接口角色差异与同代码重复聚类；
+- Completed: human-governed finding lifecycle and bilingual report renderer / 已完成人工治理的疑似问题生命周期与双语报告渲染；
+- Next: richer object-level authorization and business-flow views / 下一步：更丰富的对象级权限与业务流程视图；
 - Provider plugins with local-model support / Provider 插件与本地模型支持。
 
 ## 1.0 - Stable authorization platform / 稳定授权平台

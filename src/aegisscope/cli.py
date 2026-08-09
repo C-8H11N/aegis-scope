@@ -25,12 +25,17 @@ from aegisscope.contracts.models import (
     StageProposal,
 )
 from aegisscope.i18n import translate
+from aegisscope.findings.models import FindingStatus, FindingTransition
+from aegisscope.findings.service import FindingLifecycleError, FindingService
+from aegisscope.findings.store import AnalystStore
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
 from aegisscope.reporting import ReportLanguage, load_report_template
 from aegisscope.runner.executor import StageExecutor
 from aegisscope.security.integrity import atomic_write_new_text, canonical_sha256
 from aegisscope.transport.ssh import OpenSshTransport
+from aegisscope.traffic.analyzer import TrafficAnalysisError, TrafficAnalyzer
+from aegisscope.traffic.importer import TrafficImportError, TrafficImporter
 
 app = typer.Typer(
     name="aegisscope",
@@ -53,6 +58,11 @@ def _write_model(path: Path, model: Any) -> None:
         json.dumps(model.model_dump(mode="json"), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _analyst_store(settings: Settings) -> AnalystStore:
+    settings.ensure_local_directories()
+    return AnalystStore(settings.data_dir / "db" / "aegisscope.sqlite3")
 
 
 @app.command("version")
@@ -237,6 +247,136 @@ def analyze_evidence(
     )
     console.print(str(json_path))
     console.print(str(markdown_path))
+
+
+@app.command("traffic-import")
+def traffic_import(
+    source: Path,
+    program_name: str = typer.Option(..., "--program-name"),
+    allow_host: list[str] = typer.Option(..., "--allow-host"),
+    deny_host: list[str] | None = typer.Option(None, "--deny-host"),
+    role: str = typer.Option("unknown", "--role"),
+    source_format: str = typer.Option("auto", "--format"),
+) -> None:
+    """Import HAR/Burp XML as redacted derived data / 脱敏导入流量。"""
+
+    settings = Settings.from_env()
+    importer = TrafficImporter()
+    try:
+        document = importer.import_file(
+            source,
+            program_name=program_name,
+            allowlist=allow_host,
+            denylist=deny_host or [],
+            role_hint=role,
+            source_format=source_format,
+        )
+        output = settings.data_dir / "imports" / document.import_id
+        paths = importer.write(document, output)
+        _analyst_store(settings).put_import(document)
+    except (TrafficImportError, FileExistsError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Imported / 已导入: {document.record_count}; "
+        f"out-of-scope skipped / 跳过范围外: {document.skipped_out_of_scope}[/green]"
+    )
+    console.print(str(paths[0]))
+    console.print("Raw request bodies, cookies, and tokens were not persisted.")
+
+
+@app.command("traffic-analyze")
+def traffic_analyze(
+    traffic_files: list[Path] = typer.Argument(..., help="1-20 derived traffic.json files"),
+) -> None:
+    """Compare redacted captures offline / 离线比较脱敏流量。"""
+
+    settings = Settings.from_env()
+    try:
+        imports = [TrafficImporter.load(path) for path in traffic_files]
+        analysis = TrafficAnalyzer().analyze(imports)
+        output = settings.data_dir / "traffic-analyses" / analysis.analysis_id
+        paths = TrafficAnalyzer().write(analysis, output)
+        store = _analyst_store(settings)
+        store.put_analysis(analysis)
+        created = FindingService(store).ingest(analysis)
+    except (TrafficImportError, TrafficAnalysisError, FileExistsError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Candidates / 候选: {analysis.candidate_count}; "
+        f"new findings / 新记录: {created}; confirmed / 已确认: 0[/green]"
+    )
+    console.print(str(paths[0]))
+
+
+@app.command("finding-list")
+def finding_list(limit: int = typer.Option(100, min=1, max=500)) -> None:
+    """List local finding lifecycle records / 列出本地漏洞记录。"""
+
+    settings = Settings.from_env()
+    findings = _analyst_store(settings).list_findings(limit)
+    table = Table(title="Findings / 漏洞记录")
+    for heading in ("ID", "Status", "Severity", "Endpoint", "Reportable"):
+        table.add_column(heading)
+    for finding in findings:
+        table.add_row(
+            finding.finding_id,
+            finding.status.value,
+            finding.severity_hint.value,
+            finding.endpoint_key,
+            "yes" if finding.reportable else "no",
+        )
+    console.print(table)
+
+
+@app.command("finding-transition")
+def finding_transition(
+    finding_id: str,
+    to_status: FindingStatus = typer.Option(..., "--to"),
+    statement: str = typer.Option(..., "--statement"),
+    impact: str | None = typer.Option(None, "--impact"),
+    remediation: str | None = typer.Option(None, "--remediation"),
+    duplicate_of: str | None = typer.Option(None, "--duplicate-of"),
+) -> None:
+    """Apply a human-reviewed lifecycle transition / 人工审核后变更状态。"""
+
+    settings = Settings.from_env()
+    try:
+        request = FindingTransition(
+            to_status=to_status,
+            statement=statement,
+            impact=impact,
+            remediation=remediation,
+            duplicate_of=duplicate_of,
+        )
+        finding = FindingService(_analyst_store(settings)).transition(finding_id, request)
+    except (FindingLifecycleError, KeyError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]{finding.finding_id}: {finding.status.value}; "
+        f"reportable={finding.reportable}[/green]"
+    )
+
+
+@app.command("finding-report")
+def finding_report(
+    finding_id: str,
+    output: Path = typer.Option(Path("finding-report.zh-CN.md"), "--output"),
+    language: str = typer.Option("zh-CN", "--language"),
+) -> None:
+    """Render a report only after human confirmation / 仅为人工确认项生成报告。"""
+
+    settings = Settings.from_env()
+    try:
+        path = FindingService(_analyst_store(settings)).render_report(
+            finding_id, output, language=language
+        )
+    except (FindingLifecycleError, KeyError, FileExistsError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Report / 报告: {path}[/green]")
 
 
 @app.command("report-template")

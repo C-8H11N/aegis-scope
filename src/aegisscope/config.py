@@ -48,5 +48,13 @@ class Settings:
         )
 
     def ensure_local_directories(self) -> None:
-        for relative in ("db", "jobs", "proposals", "evidence", "reports"):
+        for relative in (
+            "db",
+            "jobs",
+            "proposals",
+            "evidence",
+            "reports",
+            "imports",
+            "traffic-analyses",
+        ):
             (self.data_dir / relative).mkdir(parents=True, exist_ok=True)

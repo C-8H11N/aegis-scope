@@ -28,6 +28,6 @@ if ($LASTEXITCODE -ne 0) { throw "Remote check directory initialization failed" 
 & scp -r (Join-Path $repoRoot "src") (Join-Path $repoRoot "tests") (Join-Path $repoRoot "examples") "${SshAlias}:$remoteCheckRoot/"
 if ($LASTEXITCODE -ne 0) { throw "Check upload failed" }
 
-& ssh $SshAlias "cd $remoteCheckRoot && python3 -m compileall -q src"
+& ssh $SshAlias "cd $remoteCheckRoot && python3 -m compileall -q src tests"
 if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed" }
 Write-Host "Kali Python syntax validation passed."

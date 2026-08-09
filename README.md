@@ -80,6 +80,9 @@ Windows 控制平面负责编排与审计；Kali Runner 在允许执行前，会
 | 模型 API | 兼容 OpenAI 风格 API，但仅能生成未授权提案 |
 | 证据 | 敏感头和正文脱敏，响应体大小受限 |
 | 自动研判 | 离线识别目录列表、错误栈泄露、Source Map、安全头与 CORS 等候选并排序 |
+| 流量智能 | 对 HAR/Burp XML 先脱敏再落盘，按角色比较归一化接口、状态和 JSON 结构 |
+| 提交去重 | 根据方法、路径、状态类别、响应结构与技术特征标记疑似同代码不同环境 |
+| 漏洞生命周期 | `候选 → 待验证 → 人工确认 → 已提交/已修复`，候选默认不可生成报告 |
 | 完整性 | 清单 SHA-256 双端校验、任务防重放、证据索引和文件哈希 |
 | 审计 | Windows 本地 SQLite 任务历史与结构化 Runner 输出 |
 | 传输 | 固定 OpenSSH/SCP 参数数组，不使用 `shell=True` 或任意 Shell 通道 |
@@ -179,6 +182,11 @@ aegisscope serve
 aegisscope validate .\examples\safe-demo\stage.json
 aegisscope runner-dry-run .\examples\safe-demo\stage.json
 aegisscope analyze-evidence .\var\evidence\<job-id>
+aegisscope traffic-import D:\captures\capture.har --program-name "授权项目" --allow-host example.invalid --role guest
+aegisscope traffic-analyze .\var\imports\<import-id>\traffic.json
+aegisscope finding-list
+aegisscope finding-transition <finding-id> --to needs_validation --statement "已人工复核，申请最小化验证阶段。"
+aegisscope finding-report <finding-id> --language zh-CN --output report.md
 aegisscope recover-evidence <job-id>          # 仅预览 SCP 恢复
 aegisscope report-template --language zh-CN --output report.md
 ```
@@ -187,6 +195,17 @@ aegisscope report-template --language zh-CN --output report.md
 远程证据；它不会重新调用 Runner，也不会重放任何目标请求。恢复结果写入新的不可覆盖目录。
 
 内置演示使用 `example.invalid`，并永久保持 `dry_run: true`。
+
+### 离线流量智能工作流
+
+1. 在 Windows 测试虚拟机中用 Burp 人工抓取授权功能，并按角色分别导出 HAR 或 Burp XML；
+2. 原始抓包保留在仓库外，不复制到 Git；在 Windows 控制端用 `traffic-import` 指向原文件，并为每份流量提供精确 `--allow-host` 和 `--role`；
+3. 导入器先执行范围过滤和脱敏，只把派生记录写入 `var/imports/`；
+4. 用 `traffic-analyze` 比较多个角色或环境，结果写入 `var/traffic-analyses/` 并进入本地线索台账；
+5. 工具输出始终是不可提交候选。人工核对业务语义后，才可用 `finding-transition` 记录“待验证”；另行获得最小化验证授权并确认真实影响后，才能变更为 `confirmed`；
+6. 只有 `confirmed`、`submitted` 或 `fixed` 状态能用 `finding-report` 生成中英文报告。
+
+整个流量分析过程不会重放 HTTP 请求，也不会把原始 Cookie、Token、请求正文或响应敏感值复制进项目目录。
 
 ## 配置
 
@@ -214,6 +233,8 @@ aegis-scope/
 │   ├── policy/                # 确定性授权策略门
 │   ├── runner/                # 受限 Kali 执行器
 │   ├── analysis/              # 离线漏洞候选发现、评分与去重
+│   ├── traffic/               # HAR/Burp XML 脱敏导入、角色差异和重复聚类
+│   ├── findings/              # 人工治理的漏洞生命周期与报告门槛
 │   ├── transport/             # 固定 SSH/SCP 传输
 │   ├── providers/             # 仅提案模型适配器
 │   └── contracts/             # 严格共享协议
@@ -235,6 +256,10 @@ aegis-scope/
 | `POST /api/v1/jobs/prepare` | 在本地保存已校验任务 |
 | `GET /api/v1/jobs` | 读取本地审计记录 |
 | `POST /api/v1/jobs/{job_id}/analyze` | 离线分析已下载证据，不发送请求 |
+| `GET /api/v1/traffic/imports` | 读取脱敏派生流量导入记录 |
+| `GET /api/v1/traffic/analyses` | 读取离线流量差异与去重结果 |
+| `GET /api/v1/findings` | 读取本地漏洞候选及人工状态 |
+| `POST /api/v1/findings/{finding_id}/transition` | 记录受约束的人工状态变更 |
 | `POST /api/v1/proposals` | 生成未授权模型提案 |
 
 ## 开发与测试
@@ -255,7 +280,7 @@ AegisScope 当前处于 Alpha、离线优先阶段。它会自动发现漏洞候
 后续计划：
 
 - 基于 Ed25519 的清单签名与可信发布；
-- Burp/HAR 导入、跨阶段证据差异比较和重复漏洞识别；
+- 更细粒度的业务流程建模和对象级权限差异视图；
 - 带角色信息的本地授权记录；
 - 更完善的 Mock Server 与端到端安全测试；
 - 策略接口稳定后的 Windows 打包版本。

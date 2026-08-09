@@ -80,6 +80,9 @@ The dashboard intentionally has **no direct target-execution button**.
 | Model API | OpenAI-compatible proposal adapter with no execution authority |
 | Evidence | Sensitive header/text redaction and bounded response collection |
 | Auto triage | Offline ranking of directory listing, verbose error, source map, header, and CORS leads |
+| Traffic intelligence | Redact HAR/Burp XML before persistence, then compare normalized endpoints, roles, status, and JSON shape |
+| Submission deduplication | Flag likely same-code environments using method, path, status class, response shape, and technical posture |
+| Finding lifecycle | `candidate → needs validation → human confirmed → submitted/fixed`; candidates cannot produce reports |
 | Integrity | Cross-end manifest SHA-256, replay prevention, evidence indexes, and file hashes |
 | Audit | Local SQLite job history plus structured runner output |
 | Transport | Fixed OpenSSH/SCP argument arrays; no `shell=True` and no arbitrary shell channel |
@@ -179,6 +182,11 @@ Useful offline commands:
 aegisscope validate .\examples\safe-demo\stage.json
 aegisscope runner-dry-run .\examples\safe-demo\stage.json
 aegisscope analyze-evidence .\var\evidence\<job-id>
+aegisscope traffic-import D:\captures\capture.har --program-name "Authorized Program" --allow-host example.invalid --role guest
+aegisscope traffic-analyze .\var\imports\<import-id>\traffic.json
+aegisscope finding-list
+aegisscope finding-transition <finding-id> --to needs_validation --statement "Human review completed; request minimal validation."
+aegisscope finding-report <finding-id> --language en --output report.md
 aegisscope recover-evidence <job-id>          # preview SCP-only recovery
 aegisscope report-template --language en --output report.md
 ```
@@ -188,6 +196,17 @@ re-downloads remote evidence only. It never invokes the runner or replays a targ
 and writes into a fresh, non-overwriting recovery directory.
 
 The included demo targets `example.invalid` and remains `dry_run: true`.
+
+### Offline traffic-intelligence workflow
+
+1. Capture an authorized workflow manually in Burp on the Windows test VM, exporting separate HAR or Burp XML files for each role.
+2. Keep raw captures outside the repository. On the Windows control host, point `traffic-import` at the original file and provide an exact `--allow-host` plus `--role` for every capture.
+3. The importer applies scope filtering and redaction first, then writes derived records to `var/imports/`.
+4. Compare roles or environments with `traffic-analyze`; results go to `var/traffic-analyses/` and the local finding ledger.
+5. Tool output remains non-reportable. After business-context review, use `finding-transition` to record `needs_validation`; only a separately authorized minimal validation with confirmed impact may advance it to `confirmed`.
+6. Only `confirmed`, `submitted`, or `fixed` findings can produce Chinese or English reports with `finding-report`.
+
+Traffic analysis never replays HTTP requests or copies raw cookies, tokens, request bodies, or sensitive response values into the project.
 
 ## Configuration
 
@@ -215,6 +234,8 @@ aegis-scope/
 │   ├── policy/                # Deterministic authorization gate
 │   ├── runner/                # Constrained Kali executor
 │   ├── analysis/              # Offline candidate discovery, ranking, and deduplication
+│   ├── traffic/               # Redacted HAR/Burp import, role diffing, and duplicate clustering
+│   ├── findings/              # Human-governed lifecycle and report gate
 │   ├── transport/             # Fixed SSH/SCP transport
 │   ├── providers/             # Proposal-only model adapters
 │   └── contracts/             # Strict shared schemas
@@ -236,6 +257,10 @@ Interactive documentation is available at `/docs` while the local service is run
 | `POST /api/v1/jobs/prepare` | Store a validated job locally |
 | `GET /api/v1/jobs` | Read local audit records |
 | `POST /api/v1/jobs/{job_id}/analyze` | Analyze downloaded evidence offline; sends no requests |
+| `GET /api/v1/traffic/imports` | Read redacted derived traffic imports |
+| `GET /api/v1/traffic/analyses` | Read offline traffic diffs and duplicate hints |
+| `GET /api/v1/findings` | Read local candidates and human-reviewed state |
+| `POST /api/v1/findings/{finding_id}/transition` | Record a constrained human lifecycle transition |
 | `POST /api/v1/proposals` | Create an unapproved model proposal |
 
 ## Development
@@ -256,7 +281,7 @@ AegisScope is an alpha, offline-first foundation. It automatically discovers and
 Planned work:
 
 - Ed25519-signed manifests and trusted releases;
-- Burp/HAR import, cross-stage evidence diffing, and duplicate detection;
+- richer business-flow modeling and object-level authorization diff views;
 - role-aware local approval records;
 - improved mock-server and end-to-end safety tests;
 - packaged Windows releases after the policy interface stabilizes.

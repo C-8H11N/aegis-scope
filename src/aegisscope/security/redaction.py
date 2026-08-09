@@ -19,6 +19,7 @@ TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("bearer_token", re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.I)),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")),
     ("api_key", re.compile(r"(?i)\b(api[_-]?key|secret|token)\b\s*[:=]\s*['\"]?[A-Za-z0-9._~+/=-]{12,}")),
+    ("csp_nonce", re.compile(r"(?i)\bnonce-[A-Za-z0-9+/=_-]{8,}")),
     ("email", re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)),
     ("phone", re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")),
     ("cn_id", re.compile(r"(?<!\d)\d{17}[0-9Xx](?!\d)")),

@@ -611,7 +611,7 @@ main {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
   margin: 18px 0 40px;
 }
@@ -646,6 +646,7 @@ main {
 .metric-icon--violet { background: color-mix(in srgb, var(--violet) 12%, transparent); color: var(--violet); }
 .metric-icon--amber { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
 .metric-icon--green { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.metric-icon--rose { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 
 .metric-card p,
 .metric-card strong,
@@ -1004,6 +1005,94 @@ tbody tr:last-child td {
   color: var(--success);
   font-size: 9px;
   font-weight: 800;
+}
+
+.analyst-boundary {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: var(--radius-sm);
+  margin: -4px 0 18px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-soft));
+  padding: 11px 13px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.analyst-boundary svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.findings-table-wrap {
+  min-height: 226px;
+}
+
+.findings-table-wrap td:first-child {
+  max-width: 320px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: normal;
+}
+
+.findings-table-wrap .endpoint-cell {
+  max-width: 380px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.severity-badge,
+.finding-status,
+.eligibility {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.severity-high,
+.finding-status-false_positive {
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  color: var(--danger);
+}
+
+.severity-medium,
+.finding-status-needs_validation,
+.finding-status-duplicate {
+  border-color: color-mix(in srgb, var(--warning) 34%, transparent);
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+  color: var(--warning);
+}
+
+.severity-low,
+.finding-status-candidate {
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+}
+
+.finding-status-confirmed,
+.finding-status-submitted,
+.finding-status-fixed,
+.eligibility.is-reportable {
+  border-color: color-mix(in srgb, var(--success) 34%, transparent);
+  background: color-mix(in srgb, var(--success) 9%, transparent);
+  color: var(--success);
 }
 
 .table-empty {

@@ -42,6 +42,8 @@ def test_dashboard_and_static_assets_are_served(tmp_path: Path) -> None:
     assert dashboard.status_code == 200
     assert "AegisScope" in dashboard.text
     assert "manifest-json" in dashboard.text
+    assert "findings-body" in dashboard.text
+    assert "候选默认不可提交" in dashboard.text
     assert "frame-ancestors 'none'" in dashboard.headers["content-security-policy"]
     assert dashboard.headers["x-frame-options"] == "DENY"
 
@@ -69,3 +71,28 @@ def test_web_rejects_non_loopback_host_header(tmp_path: Path) -> None:
         json={},
     )
     assert cross_origin.status_code == 403
+
+
+def test_finding_api_is_local_and_starts_empty(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        ssh_alias="kali-src",
+        remote_root="~/src-runner",
+        llm_base_url=None,
+        llm_api_key=None,
+        llm_model=None,
+        language="zh-CN",
+    )
+    client = TestClient(create_app(settings))
+
+    listing = client.get("/api/v1/findings")
+    assert listing.status_code == 200
+    assert listing.json() == []
+    missing = client.post(
+        "/api/v1/findings/finding-0000000000000000/transition",
+        json={
+            "to_status": "needs_validation",
+            "statement": "Human review statement for a missing record.",
+        },
+    )
+    assert missing.status_code == 404

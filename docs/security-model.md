@@ -27,8 +27,17 @@ The offline analyzer treats all target-derived content as data. Its deterministi
 create candidates and observations, but cannot authorize a stage, modify a manifest, send a
 request, or mark a finding reportable.
 
+HAR and Burp XML imports require an explicit exact-host allowlist. Raw messages, request bodies,
+cookies, authorization values, and response secrets are not copied into project storage. Only
+redacted derived records are persisted. A finding becomes reportable only through a constrained,
+audited human lifecycle transition with concrete impact and evidence references.
+
 离线分析器把所有目标内容视为数据。确定性规则可以生成候选和观察项，但不能授予阶段
 权限、修改清单、发送请求或把疑似问题标记为可提交漏洞。
+
+HAR 与 Burp XML 导入必须提供精确主机允许列表。原始报文、请求正文、Cookie、授权值和
+响应敏感值不会复制到项目存储中，仅保存脱敏后的派生记录。疑似问题只有经过受约束、
+可审计的人工状态变更，并补充具体影响与证据索引后，才可成为报告对象。
 
 ## Failure behavior / 失败行为
 

@@ -6,6 +6,7 @@ const translations = {
     navOverview: "总览",
     navValidator: "清单校验",
     navJobs: "审计记录",
+    navFindings: "线索台账",
     navSafety: "安全边界",
     executionLocked: "执行门已锁定",
     localOnly: "仅本地控制平面",
@@ -29,6 +30,8 @@ const translations = {
     configuredUnchecked: "已配置，未连接检测",
     preparedJobs: "本地任务",
     auditStored: "SQLite 审计留痕",
+    findingRecords: "漏洞线索",
+    humanReviewedOnly: "确认与报告必须人工审核",
     policyGate: "确定性策略门",
     validatorTitle: "阶段清单校验器",
     validatorDescription: "导入 JSON 清单并在本地检查授权、精确范围、请求上限与停止条件。校验不会访问目标。",
@@ -54,6 +57,26 @@ const translations = {
     updated: "更新时间",
     noJobs: "暂无本地任务",
     noJobsDescription: "校验并准备一份清单后会显示在这里。",
+    analystWorkspace: "离线分析工作台",
+    findingsTitle: "漏洞候选与生命周期",
+    findingsDescription: "HAR 或 Burp XML 先在命令行脱敏导入，再在这里查看候选、人工状态与报告资格。候选默认不可提交。",
+    analystBoundary: "这里只展示脱敏派生数据。工具不会自动重放请求、确认漏洞或生成可提交结论。",
+    findingTitle: "候选标题",
+    endpoint: "归一化接口",
+    severity: "风险提示",
+    reportEligibility: "报告资格",
+    reportable: "可生成报告",
+    notReportable: "不可提交",
+    noFindings: "暂无候选线索",
+    noFindingsDescription: "离线导入并分析授权流量后，候选项会显示在这里。",
+    candidateStatus: "待复核",
+    needsValidationStatus: "待授权验证",
+    confirmedStatus: "已人工确认",
+    falsePositiveStatus: "误报",
+    duplicateStatus: "重复",
+    acceptedRiskStatus: "已接受风险",
+    submittedStatus: "已提交",
+    fixedStatus: "已修复",
     safetyByDesign: "默认安全设计",
     safetyTitle: "模型不能越过策略门",
     safetyDescription: "AegisScope 把模型建议与实际执行彻底分离。API 接入不会自动授予任何目标权限。",
@@ -88,13 +111,15 @@ const translations = {
     refreshFailed: "无法刷新本地任务列表。",
     themeLabel: "切换明暗主题",
     languageLabel: "Switch to English",
-    refreshLabel: "刷新任务"
+    refreshLabel: "刷新任务",
+    refreshFindingsLabel: "刷新线索"
   },
   en: {
     skip: "Skip to main content",
     navOverview: "Overview",
     navValidator: "Manifest validator",
     navJobs: "Audit trail",
+    navFindings: "Finding ledger",
     navSafety: "Safety boundary",
     executionLocked: "Execution gate locked",
     localOnly: "Local control plane only",
@@ -118,6 +143,8 @@ const translations = {
     configuredUnchecked: "Configured, not connected",
     preparedJobs: "Local jobs",
     auditStored: "SQLite audit trail",
+    findingRecords: "Finding candidates",
+    humanReviewedOnly: "Confirmation and reports require human review",
     policyGate: "Deterministic policy gate",
     validatorTitle: "Stage manifest validator",
     validatorDescription: "Import JSON and check authorization, exact scope, request caps, and stop conditions locally. Validation never contacts a target.",
@@ -143,6 +170,26 @@ const translations = {
     updated: "Updated",
     noJobs: "No local jobs yet",
     noJobsDescription: "Validate and prepare a manifest to see it here.",
+    analystWorkspace: "Offline analyst workspace",
+    findingsTitle: "Finding candidates and lifecycle",
+    findingsDescription: "Import HAR or Burp XML through the redacting CLI, then review candidates, human status, and report eligibility here. Candidates are not reportable by default.",
+    analystBoundary: "Only redacted derived data appears here. The tool never replays requests, confirms vulnerabilities, or creates reportable conclusions automatically.",
+    findingTitle: "Candidate title",
+    endpoint: "Normalized endpoint",
+    severity: "Severity hint",
+    reportEligibility: "Report eligibility",
+    reportable: "Report eligible",
+    notReportable: "Not reportable",
+    noFindings: "No finding candidates",
+    noFindingsDescription: "Candidates appear here after authorized traffic is imported and analyzed offline.",
+    candidateStatus: "Needs review",
+    needsValidationStatus: "Needs authorized validation",
+    confirmedStatus: "Human confirmed",
+    falsePositiveStatus: "False positive",
+    duplicateStatus: "Duplicate",
+    acceptedRiskStatus: "Accepted risk",
+    submittedStatus: "Submitted",
+    fixedStatus: "Fixed",
     safetyByDesign: "Safe by design",
     safetyTitle: "The model cannot cross the policy gate",
     safetyDescription: "AegisScope separates model proposals from execution. Connecting an API never grants target authorization.",
@@ -177,7 +224,8 @@ const translations = {
     refreshFailed: "Could not refresh the local job list.",
     themeLabel: "Toggle light and dark theme",
     languageLabel: "切换到中文",
-    refreshLabel: "Refresh jobs"
+    refreshLabel: "Refresh jobs",
+    refreshFindingsLabel: "Refresh findings"
   }
 };
 
@@ -211,9 +259,13 @@ const elements = {
   runnerStatus: document.querySelector("#runner-status"),
   runnerAlias: document.querySelector("#runner-alias"),
   jobCount: document.querySelector("#job-count"),
+  findingCount: document.querySelector("#finding-count"),
   jobsBody: document.querySelector("#jobs-body"),
   jobsEmpty: document.querySelector("#jobs-empty"),
   refreshJobs: document.querySelector("#refresh-jobs"),
+  findingsBody: document.querySelector("#findings-body"),
+  findingsEmpty: document.querySelector("#findings-empty"),
+  refreshFindings: document.querySelector("#refresh-findings"),
   sidebarVersion: document.querySelector("#sidebar-version"),
   toast: document.querySelector("#toast")
 };
@@ -230,6 +282,7 @@ function applyLanguage() {
   elements.themeToggle.setAttribute("aria-label", t("themeLabel"));
   elements.languageToggle.setAttribute("aria-label", t("languageLabel"));
   elements.refreshJobs.setAttribute("aria-label", t("refreshLabel"));
+  elements.refreshFindings.setAttribute("aria-label", t("refreshFindingsLabel"));
   if (state.decision) {
     renderValidation(state.decision);
   }
@@ -518,6 +571,73 @@ async function loadJobs(showErrors = false) {
   }
 }
 
+function findingStatusName(status) {
+  const names = {
+    candidate: "candidateStatus",
+    needs_validation: "needsValidationStatus",
+    confirmed: "confirmedStatus",
+    false_positive: "falsePositiveStatus",
+    duplicate: "duplicateStatus",
+    accepted_risk: "acceptedRiskStatus",
+    submitted: "submittedStatus",
+    fixed: "fixedStatus"
+  };
+  return names[status] ? t(names[status]) : String(status || "—");
+}
+
+function renderFindings(findings) {
+  elements.findingsBody.replaceChildren();
+  const safeFindings = Array.isArray(findings) ? findings : [];
+  elements.findingCount.textContent = String(safeFindings.length);
+  elements.findingsEmpty.classList.toggle("is-hidden", safeFindings.length > 0);
+
+  safeFindings.forEach((finding) => {
+    const row = document.createElement("tr");
+    const title = finding && typeof finding.title === "object"
+      ? finding.title[state.language === "zh-CN" ? "zh_cn" : "en"]
+      : "—";
+    row.appendChild(createCell(String(title || "—")));
+    const endpointCell = createCell(String(finding.endpoint_key || "—"));
+    endpointCell.className = "endpoint-cell";
+    row.appendChild(endpointCell);
+
+    const severityCell = document.createElement("td");
+    const severity = document.createElement("span");
+    severity.className = `severity-badge severity-${String(finding.severity_hint || "info")}`;
+    severity.textContent = String(finding.severity_hint || "info");
+    severityCell.appendChild(severity);
+    row.appendChild(severityCell);
+
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    status.className = `finding-status finding-status-${String(finding.status || "candidate")}`;
+    status.textContent = findingStatusName(finding.status);
+    statusCell.appendChild(status);
+    row.appendChild(statusCell);
+
+    const eligibilityCell = document.createElement("td");
+    const eligibility = document.createElement("span");
+    eligibility.className = finding.reportable ? "eligibility is-reportable" : "eligibility";
+    eligibility.textContent = t(finding.reportable ? "reportable" : "notReportable");
+    eligibilityCell.appendChild(eligibility);
+    row.appendChild(eligibilityCell);
+    row.appendChild(createCell(formatDate(finding.updated_at)));
+    elements.findingsBody.appendChild(row);
+  });
+}
+
+async function loadFindings(showErrors = false) {
+  try {
+    const findings = await apiRequest("/api/v1/findings?limit=50");
+    renderFindings(findings);
+  } catch (_error) {
+    elements.findingCount.textContent = "—";
+    if (showErrors) {
+      showToast(t("requestFailed"));
+    }
+  }
+}
+
 async function loadSystemStatus() {
   const results = await Promise.allSettled([
     apiRequest("/health"),
@@ -575,7 +695,7 @@ elements.languageToggle.addEventListener("click", async () => {
   state.language = state.language === "zh-CN" ? "en" : "zh-CN";
   localStorage.setItem("aegisscope-language", state.language);
   applyLanguage();
-  await Promise.all([loadSystemStatus(), loadJobs()]);
+  await Promise.all([loadSystemStatus(), loadJobs(), loadFindings()]);
 });
 
 elements.manifestInput.addEventListener("input", invalidateManifest);
@@ -610,9 +730,11 @@ elements.clearManifest.addEventListener("click", () => {
 elements.validateManifest.addEventListener("click", validateCurrentManifest);
 elements.prepareJob.addEventListener("click", prepareCurrentJob);
 elements.refreshJobs.addEventListener("click", () => loadJobs(true));
+elements.refreshFindings.addEventListener("click", () => loadFindings(true));
 
 applyTheme();
 applyLanguage();
 installNavigationObserver();
 loadSystemStatus();
 loadJobs();
+loadFindings();

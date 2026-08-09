@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.2.0 - Unreleased
+## 0.3.0 - Unreleased
+
+- Added bounded HAR and Burp XML import with exact-host scope filtering and redaction before persistence.
+- Added offline endpoint/role comparison, sensitive-field and verbose-error candidates, and same-code duplicate clustering.
+- Added a human-governed finding lifecycle backed by SQLite; candidates are non-reportable by default.
+- Added Chinese and English report rendering that is available only after human confirmation.
+- Added CLI/API entry points and a responsive finding ledger in the local dashboard.
+
+## 0.2.0 - 2026-08-09
 
 - Added deterministic offline discovery of ranked vulnerability candidates and observations.
 - Added manifest SHA-256 handoff verification on the Kali runner.

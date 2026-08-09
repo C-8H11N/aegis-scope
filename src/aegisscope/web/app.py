@@ -15,6 +15,9 @@ from aegisscope import __version__
 from aegisscope.analysis.engine import EvidenceAnalysisError, EvidenceAnalyzer
 from aegisscope.config import Settings
 from aegisscope.contracts.models import JOB_ID_RE, PlannerInput, StageManifest
+from aegisscope.findings.models import FindingTransition
+from aegisscope.findings.service import FindingLifecycleError, FindingService
+from aegisscope.findings.store import AnalystStore
 from aegisscope.i18n import MESSAGES
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
@@ -25,6 +28,8 @@ STATIC_DIR = Path(__file__).with_name("static")
 def create_app(settings: Settings | None = None) -> FastAPI:
     runtime = settings or Settings.from_env()
     orchestrator = Orchestrator(runtime)
+    analyst_store = AnalystStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
+    finding_service = FindingService(analyst_store)
     app = FastAPI(
         title="AegisScope Control Plane",
         description="Authorization-first SRC orchestration / 授权优先的 SRC 编排",
@@ -124,6 +129,42 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job
+
+    @app.get("/api/v1/traffic/imports")
+    def list_traffic_imports(limit: int = 100) -> list[dict[str, Any]]:
+        """List derived imports only; raw capture data is never returned."""
+
+        return analyst_store.list_imports(limit)
+
+    @app.get("/api/v1/traffic/analyses")
+    def list_traffic_analyses(limit: int = 100) -> list[dict[str, Any]]:
+        return analyst_store.list_analyses(limit)
+
+    @app.get("/api/v1/findings")
+    def list_findings(limit: int = 100) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in analyst_store.list_findings(limit)]
+
+    @app.get("/api/v1/findings/{finding_id}")
+    def get_finding(finding_id: str) -> dict[str, Any]:
+        finding = analyst_store.get_finding(finding_id)
+        if finding is None:
+            raise HTTPException(status_code=404, detail="finding not found")
+        return {
+            "finding": finding.model_dump(mode="json"),
+            "events": analyst_store.list_events(finding_id),
+        }
+
+    @app.post("/api/v1/findings/{finding_id}/transition")
+    def transition_finding(
+        finding_id: str, request: FindingTransition
+    ) -> dict[str, Any]:
+        try:
+            finding = finding_service.transition(finding_id, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except FindingLifecycleError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return finding.model_dump(mode="json")
 
     @app.post("/api/v1/jobs/{job_id}/analyze")
     def analyze_job(job_id: str) -> dict[str, Any]:
