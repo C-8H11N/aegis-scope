@@ -43,3 +43,25 @@ def test_payload_like_query_is_rejected(demo_payload: dict[str, Any]) -> None:
     payload["stage_type"] = "public_parameter_baseline"
     payload["requests"][0]["url"] = "https://demo.invalid/?q=%3Cscript%3E"
     assert not PolicyEngine.validate_payload(payload, now=NOW).allowed
+
+
+def test_sensitive_query_parameter_is_rejected(demo_payload: dict[str, Any]) -> None:
+    payload = deepcopy(demo_payload)
+    payload["stage_type"] = "public_parameter_baseline"
+    payload["requests"][0]["url"] = "https://demo.invalid/?access_token=example"
+    assert not PolicyEngine.validate_payload(payload, now=NOW).allowed
+
+
+def test_invalid_dns_label_is_rejected(demo_payload: dict[str, Any]) -> None:
+    payload = deepcopy(demo_payload)
+    payload["target_host"] = "bad..invalid"
+    payload["allowlist"] = ["bad..invalid"]
+    payload["requests"][0]["url"] = "https://bad..invalid/"
+    assert not PolicyEngine.validate_payload(payload, now=NOW).allowed
+
+
+def test_expired_authorization_is_rejected(demo_payload: dict[str, Any]) -> None:
+    payload = deepcopy(demo_payload)
+    payload["authorization"]["expires_at"] = "2026-08-05T00:00:00Z"
+    payload["expires_at"] = "2026-08-05T00:00:00Z"
+    assert not PolicyEngine.validate_payload(payload, now=NOW).allowed

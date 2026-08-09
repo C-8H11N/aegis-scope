@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aegisscope"
-version = "0.1.0"
+version = "0.2.0"
 description = "Authorization-first SRC security assessment orchestrator with a Windows control plane and constrained Kali runner."
 readme = "README.md"
 requires-python = ">=3.11"

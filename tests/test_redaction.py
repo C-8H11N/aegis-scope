@@ -1,4 +1,4 @@
-from aegisscope.security.redaction import redact_headers, redact_text
+from aegisscope.security.redaction import redact_headers, redact_text, redact_url
 
 
 def test_sensitive_headers_are_removed() -> None:
@@ -14,3 +14,10 @@ def test_tokens_and_personal_data_are_removed() -> None:
     assert test_token not in text
     assert "user@example.com" not in text
     assert {"bearer_token", "email"}.issubset(hits)
+
+
+def test_query_values_are_removed_from_evidence_url() -> None:
+    url, hits = redact_url("https://demo.invalid/search?q=private&lang=zh")
+    assert "private" not in url
+    assert "lang=zh" not in url
+    assert hits == ["url:query-values"]

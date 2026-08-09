@@ -23,6 +23,10 @@ class PlannerConfigurationError(ValueError):
     pass
 
 
+class PlannerResponseError(ValueError):
+    pass
+
+
 class PlannerResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -32,7 +36,15 @@ class PlannerResponse(BaseModel):
 
 
 class OpenAICompatiblePlanner:
-    def __init__(self, *, base_url: str, api_key: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        transport: httpx.BaseTransport | None = None,
+        max_response_bytes: int = 262_144,
+    ) -> None:
         parsed = urlsplit(base_url)
         loopback = parsed.hostname in {"127.0.0.1", "localhost", "::1"}
         if parsed.scheme != "https" and not (parsed.scheme == "http" and loopback):
@@ -42,6 +54,8 @@ class OpenAICompatiblePlanner:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
+        self.transport = transport
+        self.max_response_bytes = max(1024, min(max_response_bytes, 1_048_576))
 
     def propose(self, request: PlannerInput) -> StageProposal:
         system_prompt = (
@@ -63,25 +77,46 @@ class OpenAICompatiblePlanner:
                 "rationale": "short explanation",
             },
         }
-        response = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={
-                "model": self.model,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-                ],
-            },
-            timeout=30.0,
-            follow_redirects=False,
-        )
-        response.raise_for_status()
-        data: dict[str, Any] = response.json()
-        content = data["choices"][0]["message"]["content"]
-        parsed_response = PlannerResponse.model_validate_json(content)
+        captured = bytearray()
+        try:
+            with httpx.Client(
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                follow_redirects=False,
+                trust_env=False,
+                transport=self.transport,
+            ) as client:
+                with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={
+                        "model": self.model,
+                        "temperature": 0,
+                        "response_format": {"type": "json_object"},
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {
+                                "role": "user",
+                                "content": json.dumps(user_payload, ensure_ascii=False),
+                            },
+                        ],
+                    },
+                ) as response:
+                    response.raise_for_status()
+                    for chunk in response.iter_bytes():
+                        if len(captured) + len(chunk) > self.max_response_bytes:
+                            raise PlannerResponseError("model response exceeds size limit")
+                        captured.extend(chunk)
+        except httpx.HTTPError as exc:
+            raise PlannerResponseError(
+                f"model API request failed: {exc.__class__.__name__}"
+            ) from exc
+        try:
+            data: dict[str, Any] = json.loads(captured)
+            content = data["choices"][0]["message"]["content"]
+            parsed_response = PlannerResponse.model_validate_json(content)
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise PlannerResponseError("model returned an invalid proposal envelope") from exc
         return StageProposal(
             proposal_id=f"proposal-{uuid4()}",
             program_name=request.program_name,

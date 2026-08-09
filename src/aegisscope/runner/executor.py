@@ -20,7 +20,12 @@ import httpx
 from aegisscope import __version__
 from aegisscope.contracts.models import StageManifest
 from aegisscope.contracts.results import RequestResult, StageStatus, StageSummary
-from aegisscope.security.redaction import redact_headers, redact_text
+from aegisscope.security.integrity import (
+    atomic_write_new_text,
+    canonical_sha256,
+    sha256_file,
+)
+from aegisscope.security.redaction import redact_headers, redact_text, redact_url
 
 EventSink = Callable[[dict[str, Any]], None]
 SENSITIVE_BODY_HITS = {
@@ -43,31 +48,49 @@ LOGIN_MARKERS = (
 )
 
 
+class EvidenceConflictError(RuntimeError):
+    """Raised when a run would overwrite existing evidence."""
+
+
 class StageExecutor:
     def __init__(
         self,
         *,
         output_dir: Path,
         network_gate: bool = False,
+        manifest_sha256: str | None = None,
+        transport: httpx.BaseTransport | None = None,
         event_sink: EventSink | None = None,
     ) -> None:
         self.output_dir = output_dir
         self.network_gate = network_gate
+        self.manifest_sha256 = manifest_sha256
+        self.transport = transport
         self.event_sink = event_sink or (lambda _event: None)
 
     def run(self, manifest: StageManifest) -> StageSummary:
         started = datetime.now(timezone.utc)
+        if self.output_dir.exists() and any(self.output_dir.iterdir()):
+            raise EvidenceConflictError(
+                f"refusing to overwrite non-empty evidence directory: {self.output_dir}"
+            )
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._emit("stage_started", manifest.job_id, target=manifest.target_host)
 
         if manifest.dry_run or not self.network_gate:
             results = [
-                RequestResult(index=index, method=item.method.value, url=item.url)
+                RequestResult(
+                    index=index,
+                    method=item.method.value,
+                    url=redact_url(item.url)[0],
+                    url_redactions=redact_url(item.url)[1],
+                )
                 for index, item in enumerate(manifest.requests, 1)
             ]
             summary = StageSummary(
                 job_id=manifest.job_id,
                 target_host=manifest.target_host,
+                manifest_sha256=self.manifest_sha256,
                 stage_status=StageStatus.DRY_RUN,
                 dry_run=True,
                 started_at=started,
@@ -87,6 +110,7 @@ class StageExecutor:
             timeout=httpx.Timeout(manifest.limits.timeout_seconds),
             headers={"User-Agent": f"AegisScope/{__version__} authorized-stage"},
             trust_env=False,
+            transport=self.transport,
         ) as client:
             for index, request in enumerate(manifest.requests, 1):
                 if index > 1:
@@ -108,6 +132,7 @@ class StageExecutor:
         summary = StageSummary(
             job_id=manifest.job_id,
             target_host=manifest.target_host,
+            manifest_sha256=self.manifest_sha256,
             stage_status=status,
             dry_run=False,
             started_at=started,
@@ -129,16 +154,21 @@ class StageExecutor:
         self, client: httpx.Client, manifest: StageManifest, index: int
     ) -> RequestResult:
         request = manifest.requests[index - 1]
+        safe_url, url_redactions = redact_url(request.url)
         request_dir = self.output_dir / f"request-{index:02d}"
         request_dir.mkdir(parents=True, exist_ok=True)
         request_file = request_dir / "request.json"
-        request_file.write_text(
+        atomic_write_new_text(
+            request_file,
             json.dumps(
-                {"method": request.method.value, "url": request.url},
+                {
+                    "method": request.method.value,
+                    "url": safe_url,
+                    "url_redactions": url_redactions,
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
-            encoding="utf-8",
         )
 
         started = time.monotonic()
@@ -162,25 +192,11 @@ class StageExecutor:
                 safe_headers, header_hits = redact_headers(dict(response.headers))
                 content_type = response.headers.get("content-type", "").lower()
                 body_hits: list[str] = []
+                safe_body = ""
+                redacted_body_sha256: str | None = None
                 evidence_files = [
                     str(request_file.relative_to(self.output_dir)).replace("\\", "/")
                 ]
-
-                response_meta = {
-                    "status_code": response.status_code,
-                    "headers": safe_headers,
-                    "header_redactions": header_hits,
-                    "captured_bytes": len(body_bytes),
-                    "body_sha256": body_digest,
-                    "truncated": over_limit,
-                }
-                response_file = request_dir / "response.json"
-                response_file.write_text(
-                    json.dumps(response_meta, ensure_ascii=False, indent=2), encoding="utf-8"
-                )
-                evidence_files.append(
-                    str(response_file.relative_to(self.output_dir)).replace("\\", "/")
-                )
 
                 body_text = ""
                 textual = any(
@@ -191,11 +207,32 @@ class StageExecutor:
                     encoding = response.encoding or "utf-8"
                     body_text = body_bytes.decode(encoding, errors="replace")
                     safe_body, body_hits = redact_text(body_text)
+                    redacted_body_sha256 = hashlib.sha256(safe_body.encode("utf-8")).hexdigest()
                     body_file = request_dir / "body.redacted.txt"
-                    body_file.write_text(safe_body, encoding="utf-8")
+                    atomic_write_new_text(body_file, safe_body)
                     evidence_files.append(
                         str(body_file.relative_to(self.output_dir)).replace("\\", "/")
                     )
+
+                response_meta = {
+                    "status_code": response.status_code,
+                    "headers": safe_headers,
+                    "header_redactions": header_hits,
+                    "content_type": content_type,
+                    "captured_bytes": len(body_bytes),
+                    "body_sha256": body_digest,
+                    "redacted_body_sha256": redacted_body_sha256,
+                    "body_redactions": body_hits,
+                    "truncated": over_limit,
+                }
+                response_file = request_dir / "response.json"
+                atomic_write_new_text(
+                    response_file,
+                    json.dumps(response_meta, ensure_ascii=False, indent=2),
+                )
+                evidence_files.append(
+                    str(response_file.relative_to(self.output_dir)).replace("\\", "/")
+                )
 
                 stop_reason = self._stop_reason(
                     manifest=manifest,
@@ -208,7 +245,8 @@ class StageExecutor:
                 return RequestResult(
                     index=index,
                     method=request.method.value,
-                    url=request.url,
+                    url=safe_url,
+                    url_redactions=url_redactions,
                     status_code=response.status_code,
                     duration_ms=duration_ms,
                     response_bytes=len(body_bytes),
@@ -220,7 +258,8 @@ class StageExecutor:
             return RequestResult(
                 index=index,
                 method=request.method.value,
-                url=request.url,
+                url=safe_url,
+                url_redactions=url_redactions,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 error="request timeout",
                 stop_reason="request timeout",
@@ -230,7 +269,8 @@ class StageExecutor:
             return RequestResult(
                 index=index,
                 method=request.method.value,
-                url=request.url,
+                url=safe_url,
+                url_redactions=url_redactions,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 error=f"HTTP transport error: {exc.__class__.__name__}",
                 stop_reason="HTTP transport error",
@@ -265,9 +305,32 @@ class StageExecutor:
         return None
 
     def _write_summary(self, summary: StageSummary) -> None:
-        (self.output_dir / "stage-summary.json").write_text(
+        summary_path = self.output_dir / "stage-summary.json"
+        atomic_write_new_text(
+            summary_path,
             json.dumps(summary.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        )
+        files = []
+        for path in sorted(self.output_dir.rglob("*")):
+            if path.is_file() and path.name != "evidence-index.json":
+                files.append(
+                    {
+                        "path": str(path.relative_to(self.output_dir)).replace("\\", "/"),
+                        "bytes": path.stat().st_size,
+                        "sha256": sha256_file(path),
+                    }
+                )
+        index = {
+            "schema_version": 1,
+            "job_id": summary.job_id,
+            "manifest_sha256": self.manifest_sha256,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "files": files,
+        }
+        index["index_sha256"] = canonical_sha256(index)
+        atomic_write_new_text(
+            self.output_dir / "evidence-index.json",
+            json.dumps(index, ensure_ascii=False, indent=2),
         )
 
     def _emit(self, event: str, job_id: str, **fields: Any) -> None:

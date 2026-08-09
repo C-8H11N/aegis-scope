@@ -44,11 +44,13 @@ const translations = {
     prepare: "准备本地任务",
     localAudit: "本地审计轨迹",
     jobsTitle: "最近任务",
-    jobsDescription: "这里只展示本地已准备任务；任务状态不代表已向目标发送请求。",
+    jobsDescription: "展示本地任务状态与自动证据研判；只有明确的执行记录才代表曾发送请求。",
     jobId: "任务 ID",
     target: "精确目标",
     stage: "阶段",
     status: "状态",
+    analysis: "自动研判",
+    noAnalysis: "尚无证据",
     updated: "更新时间",
     noJobs: "暂无本地任务",
     noJobsDescription: "校验并准备一份清单后会显示在这里。",
@@ -77,6 +79,10 @@ const translations = {
     fileReadFailed: "无法读取所选文件。",
     preparedSuccess: "任务已在本地准备并写入审计库。",
     preparedStatus: "已准备",
+    offlineAnalyzedStatus: "已离线研判",
+    failedStatus: "失败",
+    evidenceTransferFailedStatus: "证据传输失败",
+    stoppedStatus: "已安全停止",
     basicObservation: "基础观察",
     parameterBaseline: "公开参数基线",
     refreshFailed: "无法刷新本地任务列表。",
@@ -127,11 +133,13 @@ const translations = {
     prepare: "Prepare local job",
     localAudit: "Local audit trail",
     jobsTitle: "Recent jobs",
-    jobsDescription: "Only locally prepared jobs appear here. A job status does not mean a request was sent to a target.",
+    jobsDescription: "Shows local job state and automatic evidence triage. Only an explicit execution record means requests were sent.",
     jobId: "Job ID",
     target: "Exact target",
     stage: "Stage",
     status: "Status",
+    analysis: "Auto triage",
+    noAnalysis: "No evidence",
     updated: "Updated",
     noJobs: "No local jobs yet",
     noJobsDescription: "Validate and prepare a manifest to see it here.",
@@ -160,6 +168,10 @@ const translations = {
     fileReadFailed: "The selected file could not be read.",
     preparedSuccess: "The job was prepared locally and added to the audit trail.",
     preparedStatus: "Prepared",
+    offlineAnalyzedStatus: "Offline triaged",
+    failedStatus: "Failed",
+    evidenceTransferFailedStatus: "Evidence transfer failed",
+    stoppedStatus: "Safely stopped",
     basicObservation: "Basic observation",
     parameterBaseline: "Public parameter baseline",
     refreshFailed: "Could not refresh the local job list.",
@@ -447,6 +459,17 @@ function createCell(value) {
   return cell;
 }
 
+function jobStatusName(status) {
+  const names = {
+    prepared: "preparedStatus",
+    offline_analyzed: "offlineAnalyzedStatus",
+    failed: "failedStatus",
+    evidence_transfer_failed: "evidenceTransferFailedStatus",
+    stopped: "stoppedStatus"
+  };
+  return names[status] ? t(names[status]) : String(status || "—");
+}
+
 function renderJobs(jobs) {
   elements.jobsBody.replaceChildren();
   const safeJobs = Array.isArray(jobs) ? jobs : [];
@@ -463,9 +486,21 @@ function renderJobs(jobs) {
     const statusCell = document.createElement("td");
     const status = document.createElement("span");
     status.className = "job-status";
-    status.textContent = job.status === "prepared" ? t("preparedStatus") : String(job.status || "—");
+    status.textContent = jobStatusName(job.status);
     statusCell.appendChild(status);
     row.appendChild(statusCell);
+
+    const analysis = job && typeof job.analysis === "object" ? job.analysis : null;
+    if (analysis) {
+      const candidates = Number(analysis.candidate_count || 0);
+      const observations = Number(analysis.observation_count || 0);
+      const label = state.language === "zh-CN"
+        ? `${candidates} 个候选 · ${observations} 个观察`
+        : `${candidates} candidates · ${observations} observations`;
+      row.appendChild(createCell(label));
+    } else {
+      row.appendChild(createCell(t("noAnalysis")));
+    }
     row.appendChild(createCell(formatDate(job.updated_at)));
     elements.jobsBody.appendChild(row);
   });

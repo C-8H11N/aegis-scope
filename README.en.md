@@ -25,7 +25,7 @@
 </p>
 
 > [!IMPORTANT]
-> AegisScope is not an autonomous attack agent. Connecting a model API does not grant target authorization. The model can only create proposals; deterministic policy and an explicit user approval control every executable stage.
+> AegisScope can automatically discover and rank vulnerability leads, but it is not an autonomous attack agent. Connecting a model API does not grant target authorization. The model can only create proposals; deterministic policy and explicit approval control every executable stage.
 
 ## One-click start on Windows
 
@@ -62,6 +62,7 @@ The local bilingual dashboard provides:
 - JSON import and deterministic stage-manifest validation;
 - local job preparation only after policy validation succeeds;
 - a SQLite-backed audit list;
+- automatic candidate and observation counts from downloaded evidence;
 - explicit wording that local preparation does not dispatch to Kali or contact a target.
 
 The dashboard intentionally has **no direct target-execution button**.
@@ -78,6 +79,8 @@ The dashboard intentionally has **no direct target-execution button**.
 | Approval | Stage-scoped, time-bounded, exact user authorization statement |
 | Model API | OpenAI-compatible proposal adapter with no execution authority |
 | Evidence | Sensitive header/text redaction and bounded response collection |
+| Auto triage | Offline ranking of directory listing, verbose error, source map, header, and CORS leads |
+| Integrity | Cross-end manifest SHA-256, replay prevention, evidence indexes, and file hashes |
 | Audit | Local SQLite job history plus structured runner output |
 | Transport | Fixed OpenSSH/SCP argument arrays; no `shell=True` and no arbitrary shell channel |
 
@@ -94,7 +97,8 @@ flowchart LR
     K --> P2{"Second policy validation"}
     P2 -->|"safe stage only"| E["Bounded low-impact executor"]
     E --> D["Redacted evidence"]
-    D --> W
+    D --> A["Offline candidate analysis + deduplication"]
+    A --> W
 ```
 
 No daemon or new listening port is required on Kali. The Windows app listens on loopback only.
@@ -174,8 +178,14 @@ Useful offline commands:
 ```powershell
 aegisscope validate .\examples\safe-demo\stage.json
 aegisscope runner-dry-run .\examples\safe-demo\stage.json
+aegisscope analyze-evidence .\var\evidence\<job-id>
+aegisscope recover-evidence <job-id>          # preview SCP-only recovery
 aegisscope report-template --language en --output report.md
 ```
+
+If a stage finished but evidence download failed, `recover-evidence <job-id> --execute`
+re-downloads remote evidence only. It never invokes the runner or replays a target request,
+and writes into a fresh, non-overwriting recovery directory.
 
 The included demo targets `example.invalid` and remains `dry_run: true`.
 
@@ -204,6 +214,7 @@ aegis-scope/
 │   ├── web/                   # FastAPI control plane + dashboard
 │   ├── policy/                # Deterministic authorization gate
 │   ├── runner/                # Constrained Kali executor
+│   ├── analysis/              # Offline candidate discovery, ranking, and deduplication
 │   ├── transport/             # Fixed SSH/SCP transport
 │   ├── providers/             # Proposal-only model adapters
 │   └── contracts/             # Strict shared schemas
@@ -224,6 +235,7 @@ Interactive documentation is available at `/docs` while the local service is run
 | `POST /api/v1/manifests/validate` | Deterministic validation, no dispatch |
 | `POST /api/v1/jobs/prepare` | Store a validated job locally |
 | `GET /api/v1/jobs` | Read local audit records |
+| `POST /api/v1/jobs/{job_id}/analyze` | Analyze downloaded evidence offline; sends no requests |
 | `POST /api/v1/proposals` | Create an unapproved model proposal |
 
 ## Development
@@ -239,12 +251,12 @@ Pull requests are welcome. Read [Contributing](CONTRIBUTING.md), [Code of Conduc
 
 ## Project status
 
-AegisScope is an alpha, offline-first foundation. The current focus is policy correctness, reviewability, evidence minimization, and an understandable operator experience—not increasing automation intensity.
+AegisScope is an alpha, offline-first foundation. It automatically discovers and deduplicates candidates and proposes minimal validation directions, but tool output remains a lead until a human validates server-side impact.
 
 Planned work:
 
-- signed manifest handoff and integrity verification;
-- richer offline evidence review and report workflows;
+- Ed25519-signed manifests and trusted releases;
+- Burp/HAR import, cross-stage evidence diffing, and duplicate detection;
 - role-aware local approval records;
 - improved mock-server and end-to-end safety tests;
 - packaged Windows releases after the policy interface stabilizes.

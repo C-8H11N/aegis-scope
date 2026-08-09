@@ -9,10 +9,11 @@
 
 ## 0.2 - Local laboratory validation / 本地实验室验证
 
-- Loopback mock target with deterministic scenarios / 本机模拟目标；
-- Manifest digest and signed authorization option / 清单摘要与可选签名授权；
-- Evidence import, diffing, and duplicate detection / 证据导入、差异分析与去重；
-- Better failure recovery without automatic request replay / 不自动重放请求的失败恢复。
+- Completed: manifest digest verification and one-time job consumption / 已完成清单摘要校验与任务防重放；
+- Completed: write-once evidence, hashed index, and bounded offline candidate analysis / 已完成不可覆盖证据、哈希索引和有界离线候选分析；
+- Completed: transfer failure recovery without automatic request replay / 已完成不自动重放请求的传输失败恢复；
+- Completed: deterministic mocked HTTP scenarios for runner stop and redaction behavior / 已完成 Runner 停止与脱敏行为的确定性模拟 HTTP 场景；
+- Next: Ed25519 authorization signatures, evidence diffing, and duplicate detection / 下一步：Ed25519 授权签名、证据差异分析与重复检测。
 
 ## 0.3 - Analyst workflow / 分析员工作流
 

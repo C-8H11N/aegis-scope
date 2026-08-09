@@ -10,14 +10,19 @@ from collections import Counter
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
-from urllib.parse import unquote_plus, urlsplit
+from urllib.parse import parse_qsl, unquote_plus, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
+HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,79}$")
 UNSAFE_QUERY_RE = re.compile(
     r"(?:[<>\"'{}|\\^\r\n;]|\.\./|%2e%2e|\bunion\b|\bselect\b|\bscript\b|\bsleep\s*\()",
+    re.I,
+)
+SENSITIVE_QUERY_NAME_RE = re.compile(
+    r"(?:^|[_-])(?:auth|authorization|cookie|key|password|secret|session|token)(?:$|[_-])",
     re.I,
 )
 
@@ -28,6 +33,9 @@ def normalize_exact_host(value: str) -> str:
     host = value.strip().rstrip(".").lower()
     if not host or "*" in host or "/" in host or ":" in host or not HOST_RE.fullmatch(host):
         raise ValueError("an exact DNS hostname is required")
+    labels = host.split(".")
+    if len(host) > 253 or any(not HOST_LABEL_RE.fullmatch(label) for label in labels):
+        raise ValueError("hostname contains an invalid DNS label")
     return host
 
 
@@ -156,6 +164,11 @@ class StageManifest(StrictModel):
             decoded_query = unquote_plus(parsed.query)
             if len(parsed.query) > 512 or UNSAFE_QUERY_RE.search(decoded_query):
                 raise ValueError("query string exceeds the safe public-baseline grammar")
+            query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            if len(query_pairs) > 20 or any(
+                SENSITIVE_QUERY_NAME_RE.search(name) for name, _value in query_pairs
+            ):
+                raise ValueError("sensitive or excessive query parameters are forbidden")
             counts[request.url] += 1
 
         if counts and max(counts.values()) > self.limits.per_url_max:
@@ -244,6 +257,11 @@ class StageProposal(StrictModel):
             decoded_query = unquote_plus(parsed.query)
             if len(parsed.query) > 512 or UNSAFE_QUERY_RE.search(decoded_query):
                 raise ValueError("proposal query exceeds the safe public-baseline grammar")
+            query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            if len(query_pairs) > 20 or any(
+                SENSITIVE_QUERY_NAME_RE.search(name) for name, _value in query_pairs
+            ):
+                raise ValueError("proposal contains sensitive or excessive query parameters")
             counts[request.url] += 1
         if counts and max(counts.values()) > self.limits.per_url_max:
             raise ValueError("proposal repeats a URL too many times")

@@ -9,6 +9,7 @@ from typing import Any
 from aegisscope.config import Settings
 from aegisscope.contracts.models import StageManifest
 from aegisscope.policy.engine import PolicyDecision, PolicyEngine
+from aegisscope.security.integrity import atomic_write_new_text, canonical_sha256
 from aegisscope.storage import JobStore
 
 
@@ -36,10 +37,29 @@ class Orchestrator:
         canonical = json.dumps(
             manifest.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
         )
+        digest = canonical_sha256(manifest.model_dump(mode="json"))
+        digest_path = job_dir / "manifest.sha256"
+        existing_job = self.store.get_job(manifest.job_id)
+        if existing_job:
+            existing_digest = existing_job.get("manifest_sha256") or canonical_sha256(
+                existing_job["manifest"]
+            )
+            if existing_digest != digest:
+                raise PreparationError("job_id already exists with a different audit digest")
         if manifest_path.exists() and manifest_path.read_text(encoding="utf-8") != canonical:
             raise PreparationError("job_id already exists with a different manifest")
-        manifest_path.write_text(canonical, encoding="utf-8")
-        self.store.upsert_manifest(manifest)
+        if digest_path.exists() and digest_path.read_text(encoding="ascii").strip() != digest:
+            raise PreparationError("job_id already exists with a different manifest digest")
+        if not manifest_path.exists():
+            atomic_write_new_text(manifest_path, canonical)
+        if not digest_path.exists():
+            atomic_write_new_text(digest_path, f"{digest}\n")
+        self.store.upsert_manifest(manifest, manifest_sha256=digest)
+        self.store.append_event(
+            manifest.job_id,
+            "manifest_prepared",
+            {"manifest_sha256": digest, "dry_run": manifest.dry_run},
+        )
         return manifest
 
     def prepare_file(self, path: Path) -> StageManifest:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 SENSITIVE_HEADER_NAMES = {
     "authorization",
@@ -45,3 +46,16 @@ def redact_text(text: str) -> tuple[str, list[str]]:
         if count:
             hits.append(label)
     return redacted, sorted(set(hits))
+
+
+def redact_url(url: str) -> tuple[str, list[str]]:
+    """Remove every query value before a URL is written to derived evidence."""
+
+    parsed = urlsplit(url)
+    if not parsed.query:
+        return url, []
+    pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=False)
+    safe_query = urlencode([(name, "<REDACTED>") for name, _value in pairs])
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, safe_query, "")), [
+        "url:query-values"
+    ]

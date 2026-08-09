@@ -25,7 +25,7 @@ if (-not $Execute) {
     exit 0
 }
 
-& ssh $SshAlias "umask 077; mkdir -p $remoteApp $remoteRoot/input $remoteRoot/output $remoteRoot/logs"
+& ssh $SshAlias "umask 077; mkdir -p $remoteApp $remoteRoot/input $remoteRoot/output $remoteRoot/logs $remoteRoot/state/consumed; chmod 700 $remoteRoot $remoteRoot/state $remoteRoot/state/consumed"
 if ($LASTEXITCODE -ne 0) { throw "Remote directory initialization failed" }
 
 & scp (Join-Path $repoRoot "pyproject.toml") "${SshAlias}:$remoteApp/pyproject.toml"

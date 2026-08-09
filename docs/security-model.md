@@ -9,6 +9,8 @@
 - No redirects, auth, cookies, tokens, body, or arbitrary headers / 无跳转、认证、正文；
 - No arbitrary shell or model-controlled command / 无任意 Shell 或模型控制命令；
 - Minimal redacted evidence / 最小化脱敏证据；
+- Manifest digest verification and one-time network job IDs / 清单摘要校验与网络任务一次性消费；
+- Write-once evidence with a hashed index / 不可覆盖证据与哈希索引；
 - Immediate bounded stop conditions / 明确且立即生效的停止条件。
 
 ## Prompt injection / 提示词注入
@@ -20,6 +22,13 @@ tool. The runner never sends target content back into its execution loop.
 项目规则、模型输出、目标内容、Burp 流量、日志和下载的 JavaScript 都是不可信数据，
 不能修改策略、授予权限、选择新主机或调用工具。Runner 不会把目标内容重新作为执行
 指令输入。
+
+The offline analyzer treats all target-derived content as data. Its deterministic rules may
+create candidates and observations, but cannot authorize a stage, modify a manifest, send a
+request, or mark a finding reportable.
+
+离线分析器把所有目标内容视为数据。确定性规则可以生成候选和观察项，但不能授予阶段
+权限、修改清单、发送请求或把疑似问题标记为可提交漏洞。
 
 ## Failure behavior / 失败行为
 

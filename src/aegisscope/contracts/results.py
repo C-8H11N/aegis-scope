@@ -23,6 +23,7 @@ class RequestResult(ResultModel):
     index: int = Field(ge=1)
     method: str
     url: str
+    url_redactions: list[str] = Field(default_factory=list)
     status_code: int | None = None
     duration_ms: int | None = Field(default=None, ge=0)
     response_bytes: int = Field(default=0, ge=0)
@@ -33,9 +34,10 @@ class RequestResult(ResultModel):
 
 
 class StageSummary(ResultModel):
-    schema_version: int = 1
+    schema_version: int = 2
     job_id: str
     target_host: str
+    manifest_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     stage_status: StageStatus
     dry_run: bool
     started_at: datetime

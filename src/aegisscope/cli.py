@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -14,13 +15,21 @@ from rich.console import Console
 from rich.table import Table
 
 from aegisscope import __version__
+from aegisscope.analysis.engine import EvidenceAnalysisError, EvidenceAnalyzer
 from aegisscope.config import Settings
-from aegisscope.contracts.models import Authorization, PlannerInput, StageManifest, StageProposal
+from aegisscope.contracts.models import (
+    JOB_ID_RE,
+    Authorization,
+    PlannerInput,
+    StageManifest,
+    StageProposal,
+)
 from aegisscope.i18n import translate
 from aegisscope.orchestrator import Orchestrator, PreparationError
-from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner
-from aegisscope.runner.executor import StageExecutor
+from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
 from aegisscope.reporting import ReportLanguage, load_report_template
+from aegisscope.runner.executor import StageExecutor
+from aegisscope.security.integrity import atomic_write_new_text, canonical_sha256
 from aegisscope.transport.ssh import OpenSshTransport
 
 app = typer.Typer(
@@ -96,13 +105,17 @@ def prepare(manifest: Path) -> None:
     """Store an approved job locally; do not dispatch / 本地准备，不发送。"""
 
     settings = Settings.from_env()
+    orchestrator = Orchestrator(settings)
     try:
-        prepared = Orchestrator(settings).prepare_file(manifest)
+        prepared = orchestrator.prepare_file(manifest)
     except PreparationError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from exc
     console.print(f"[green]{translate('prepared', settings.language)}[/green]")
     console.print(prepared.job_id)
+    prepared_job = orchestrator.store.get_job(prepared.job_id)
+    if prepared_job:
+        console.print(f"SHA-256: {prepared_job['manifest_sha256']}")
 
 
 @app.command("propose")
@@ -122,7 +135,11 @@ def propose(
         api_key=settings.llm_api_key,
         model=settings.llm_model,
     )
-    proposal = planner.propose(request)
+    try:
+        proposal = planner.propose(request)
+    except PlannerResponseError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
     _write_model(output, proposal)
     console.print(f"[green]Proposal / 提案: {output}[/green]")
     console.print("Authorization required / 仍需人工授权")
@@ -137,10 +154,20 @@ def authorize(
     network_enabled: bool = typer.Option(
         False, "--network-enabled", help="Create dry_run=false manifest after review"
     ),
+    confirm_proposal_sha256: str | None = typer.Option(
+        None,
+        "--confirm-proposal-sha256",
+        help="Required with --network-enabled; must match the reviewed proposal",
+    ),
 ) -> None:
     """Convert a reviewed proposal into a stage manifest / 将已审核提案转为阶段清单。"""
 
     proposal = StageProposal.model_validate(_load_object(proposal_path))
+    proposal_digest = canonical_sha256(proposal.model_dump(mode="json"))
+    if network_enabled and confirm_proposal_sha256 != proposal_digest:
+        console.print("[red]Proposal digest confirmation is required for network use.[/red]")
+        console.print(f"SHA-256: {proposal_digest}")
+        raise typer.Exit(2)
     now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=valid_hours)
     manifest = StageManifest(
@@ -162,10 +189,11 @@ def authorize(
         limits=proposal.limits,
         created_at=now,
         expires_at=expires,
-        notes=f"Created from {proposal.proposal_id}",
+        notes=f"Created from {proposal.proposal_id}; proposal_sha256={proposal_digest}",
     )
     _write_model(output, manifest)
     console.print(f"[green]Manifest / 阶段清单: {output}[/green]")
+    console.print(f"Proposal SHA-256: {proposal_digest}")
     console.print(f"dry_run={manifest.dry_run}")
 
 
@@ -183,6 +211,32 @@ def runner_dry_run(manifest: Path) -> None:
     summary = StageExecutor(output_dir=output, network_gate=False).run(decision.manifest)
     console.print(f"[green]{translate('dry_run', settings.language)}[/green]")
     console.print_json(json.dumps(summary.model_dump(mode="json"), ensure_ascii=False))
+
+
+@app.command("analyze-evidence")
+def analyze_evidence(
+    evidence_dir: Path,
+    output_dir: Path | None = typer.Option(
+        None, help="Defaults to <evidence-dir>/analysis / 默认写入证据目录下的 analysis"
+    ),
+) -> None:
+    """Find ranked candidates offline; send no requests / 离线发现并排序漏洞候选。"""
+
+    analyzer = EvidenceAnalyzer()
+    try:
+        analysis = analyzer.analyze(evidence_dir)
+        json_path, markdown_path = analyzer.write(
+            analysis, output_dir or evidence_dir / "analysis"
+        )
+    except (EvidenceAnalysisError, FileExistsError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]Candidates / 疑似漏洞: {analysis.candidate_count}; "
+        f"observations / 观察: {analysis.observation_count}[/green]"
+    )
+    console.print(str(json_path))
+    console.print(str(markdown_path))
 
 
 @app.command("report-template")
@@ -214,29 +268,143 @@ def dispatch(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from exc
     local_manifest = settings.data_dir / "jobs" / prepared.job_id / "manifest.json"
-    local_output = settings.data_dir / "evidence" / prepared.job_id
-    local_output.mkdir(parents=True, exist_ok=True)
+    local_digest = settings.data_dir / "jobs" / prepared.job_id / "manifest.sha256"
+    local_output_root = settings.data_dir / "evidence"
+    local_output_root.mkdir(parents=True, exist_ok=True)
+    local_job_output = local_output_root / prepared.job_id
+    transport_log = settings.data_dir / "jobs" / prepared.job_id / "dispatch-result.json"
     transport = OpenSshTransport(alias=settings.ssh_alias, remote_root=settings.remote_root)
     commands = transport.build_commands(
         manifest_path=local_manifest,
+        manifest_digest_path=local_digest,
         job_id=prepared.job_id,
-        local_output_dir=local_output,
+        local_output_dir=local_output_root,
     )
     table = Table(title="SSH dispatch plan / SSH 调度计划")
     table.add_column("Step")
     table.add_column("Command")
-    for name, command in (
-        ("upload", commands.upload),
-        ("execute", commands.execute),
-        ("download", commands.download),
-    ):
+    for name, command in commands.ordered():
         table.add_row(name, " ".join(command))
+    console.print(f"Manifest SHA-256: {local_digest.read_text(encoding='ascii').strip()}")
     console.print(table)
     if not execute:
         console.print("[yellow]Preview only / 仅预览[/yellow]")
         return
-    transport.run(commands)
-    console.print(f"[green]Evidence / 证据: {local_output}[/green]")
+    if transport_log.exists() or local_job_output.exists():
+        console.print(
+            "[red]This job already has dispatch or evidence state; create a new authorized "
+            "job_id instead of replaying it. / 该任务已有调度或证据状态，请重新授权并创建新 job_id。[/red]"
+        )
+        raise typer.Exit(2)
+    orchestrator.store.set_status(prepared.job_id, "dispatching")
+    orchestrator.store.append_event(prepared.job_id, "dispatch_started")
+    result = transport.run(commands)
+    atomic_write_new_text(
+        transport_log,
+        json.dumps(asdict(result), ensure_ascii=False, indent=2),
+    )
+    for step in result.steps:
+        orchestrator.store.append_event(
+            prepared.job_id,
+            f"transport_{step.name}",
+            {"returncode": step.returncode},
+        )
+
+    summary_path = local_job_output / "stage-summary.json"
+    if summary_path.is_file():
+        summary_payload = _load_object(summary_path)
+        status = str(summary_payload.get("stage_status", "failed"))
+        orchestrator.store.set_summary(prepared.job_id, status, summary_payload)
+    else:
+        execute_step = next((step for step in result.steps if step.name == "execute"), None)
+        download_step = next((step for step in result.steps if step.name == "download"), None)
+        if execute_step and execute_step.returncode == 0 and (
+            download_step is None or download_step.returncode != 0
+        ):
+            orchestrator.store.set_status(prepared.job_id, "evidence_transfer_failed")
+        else:
+            orchestrator.store.set_status(prepared.job_id, "failed")
+
+    if not result.succeeded:
+        console.print(f"[red]Dispatch failed; redacted log / 调度失败，脱敏日志: {transport_log}[/red]")
+        raise typer.Exit(3)
+
+    console.print(f"[green]Evidence / 证据: {local_job_output}[/green]")
+    try:
+        analysis = EvidenceAnalyzer().analyze(local_job_output)
+        analysis_paths = EvidenceAnalyzer().write(analysis, local_job_output / "analysis")
+        orchestrator.store.set_analysis(
+            prepared.job_id, analysis.model_dump(mode="json")
+        )
+        orchestrator.store.set_status(prepared.job_id, "offline_analyzed")
+        orchestrator.store.append_event(
+            prepared.job_id,
+            "offline_analysis_completed",
+            {
+                "candidate_count": analysis.candidate_count,
+                "observation_count": analysis.observation_count,
+            },
+        )
+        console.print(
+            f"[green]Auto triage / 自动研判: {analysis.candidate_count} candidates, "
+            f"{analysis.observation_count} observations[/green]"
+        )
+        console.print(str(analysis_paths[1]))
+    except (EvidenceAnalysisError, FileExistsError) as exc:
+        orchestrator.store.append_event(
+            prepared.job_id, "offline_analysis_failed", {"error": exc.__class__.__name__}
+        )
+        console.print(f"[yellow]Offline analysis not completed / 离线研判未完成: {exc}[/yellow]")
+
+
+@app.command("recover-evidence")
+def recover_evidence(
+    job_id: str,
+    execute: bool = typer.Option(False, "--execute", help="Perform SCP recovery only"),
+) -> None:
+    """Recover remote evidence without rerunning a target stage / 只恢复证据，不重放请求。"""
+
+    settings = Settings.from_env()
+    orchestrator = Orchestrator(settings)
+    if not JOB_ID_RE.fullmatch(job_id):
+        console.print("[red]Invalid job_id / 任务 ID 无效[/red]")
+        raise typer.Exit(2)
+    job = orchestrator.store.get_job(job_id)
+    if job is None:
+        console.print("[red]Unknown job_id / 未知任务[/red]")
+        raise typer.Exit(2)
+    recovery_root = (
+        settings.data_dir / "recovery" / job_id / f"attempt-{uuid4().hex[:12]}"
+    )
+    transport = OpenSshTransport(alias=settings.ssh_alias, remote_root=settings.remote_root)
+    command = transport.build_download_command(
+        job_id=job_id, local_output_dir=recovery_root
+    )
+    console.print("Evidence-only recovery / 仅恢复证据（不会调用 Runner）")
+    console.print(" ".join(command))
+    if not execute:
+        console.print("[yellow]Preview only / 仅预览[/yellow]")
+        return
+    recovery_root.mkdir(parents=True, exist_ok=False)
+    result = transport.recover_evidence(command)
+    orchestrator.store.append_event(
+        job_id, "evidence_recovery", {"returncode": result.returncode}
+    )
+    if result.returncode != 0:
+        console.print(f"[red]{result.stderr or 'SCP recovery failed'}[/red]")
+        raise typer.Exit(3)
+    recovered_job = recovery_root / job_id
+    console.print(f"[green]Recovered / 已恢复: {recovered_job}[/green]")
+    try:
+        analysis = EvidenceAnalyzer().analyze(recovered_job)
+        EvidenceAnalyzer().write(analysis, recovered_job / "analysis")
+        orchestrator.store.set_analysis(job_id, analysis.model_dump(mode="json"))
+        orchestrator.store.set_status(job_id, "offline_analyzed")
+        console.print(
+            f"[green]Auto triage / 自动研判: {analysis.candidate_count} candidates[/green]"
+        )
+    except EvidenceAnalysisError as exc:
+        console.print(f"[yellow]Evidence recovered but analysis failed: {exc}[/yellow]")
 
 
 @app.command("serve")
