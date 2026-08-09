@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.0 - Unreleased
+## 0.4.0 - Unreleased
+
+- Added offline Autonomous Campaign Mode with exact-host state, cumulative stage/request budgets, and an append-only audit trail.
+- Added deterministic hypothesis ranking across risk, confidence, novelty, evidence quality, and request cost.
+- Added bounded baseline proposal generation and explicit routing of authentication-dependent leads to manual Burp review.
+- Added local Campaign CLI/API workflows and a responsive bilingual campaign dashboard.
+- Campaign planning never grants target authorization, invokes Kali, sends HTTP, or confirms a vulnerability.
+
+## 0.3.0 - 2026-08-09
 
 - Added bounded HAR and Burp XML import with exact-host scope filtering and redaction before persistence.
 - Added offline endpoint/role comparison, sensitive-field and verbose-error candidates, and same-code duplicate clustering.

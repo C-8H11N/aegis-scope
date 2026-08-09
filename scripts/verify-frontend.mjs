@@ -8,7 +8,9 @@ new vm.Script(javascript, { filename: "app.js" });
 const ids = [...html.matchAll(/id="([^"]+)"/g)].map((match) => match[1]);
 const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 const translationKeys = [
-  ...new Set([...html.matchAll(/data-i18n="([^"]+)"/g)].map((match) => match[1])),
+  ...new Set(
+    [...html.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"/g)].map((match) => match[1]),
+  ),
 ];
 const missingKeys = translationKeys.filter((key) => {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

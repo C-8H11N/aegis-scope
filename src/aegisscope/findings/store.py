@@ -101,6 +101,14 @@ class AnalystStore:
     def list_analyses(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._list_documents("traffic_analyses", limit)
 
+    def get_analysis(self, analysis_id: str) -> TrafficAnalysis | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT document_json FROM traffic_analyses WHERE analysis_id=?",
+                (analysis_id,),
+            ).fetchone()
+        return TrafficAnalysis.model_validate_json(row["document_json"]) if row else None
+
     def _list_documents(self, table: str, limit: int) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 500))
         if table == "traffic_imports":

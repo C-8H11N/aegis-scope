@@ -28,6 +28,10 @@
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
           <span data-i18n="navOverview">总览</span>
         </a>
+        <a class="nav-item" href="#campaigns">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 18V6l5 3 3-6 3 6 5-3v12H4Zm4-4h8M8 17h5"/></svg>
+          <span data-i18n="navCampaigns">智能任务</span>
+        </a>
         <a class="nav-item" href="#validator">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 11.5 11 13.5l4.5-5M12 3l7 3v5c0 4.5-2.9 8-7 10-4.1-2-7-5.5-7-10V6l7-3Z"/></svg>
           <span data-i18n="navValidator">清单校验</span>
@@ -153,6 +157,16 @@
             </div>
           </article>
           <article class="metric-card">
+            <div class="metric-icon metric-icon--violet">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h6v6H5V5Zm8 0h6v6h-6V5ZM5 13h6v6H5v-6Zm11 0v3m0 0v3m0-3h3m-3 0h-3"/></svg>
+            </div>
+            <div>
+              <p data-i18n="campaignRecords">智能任务</p>
+              <strong id="campaign-count">—</strong>
+              <small data-i18n="planningOnly">离线规划，不自动执行</small>
+            </div>
+          </article>
+          <article class="metric-card">
             <div class="metric-icon metric-icon--rose">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4V5Zm4 4h8M8 13h5M17 13h.01M8 16h3"/></svg>
             </div>
@@ -162,6 +176,107 @@
               <small data-i18n="humanReviewedOnly">确认与报告必须人工审核</small>
             </div>
           </article>
+        </section>
+
+        <section class="section-card campaign-card" id="campaigns" aria-labelledby="campaigns-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="campaignEyebrow">AUTONOMOUS CAMPAIGN · 自主研究编排</p>
+              <h2 id="campaigns-title" data-i18n="campaignsTitle">让系统记住目标，并自动选择下一步</h2>
+              <p data-i18n="campaignsDescription">基于已有脱敏证据自动去重、排序假设和控制总预算。系统只生成待授权提案；不会连接 Kali、发送目标请求或自动认定漏洞。</p>
+            </div>
+            <span class="safe-badge">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h3l2-5 4 10 2-5h3M4 4h16v16H4V4Z"/></svg>
+              <span data-i18n="offlinePlanner">离线决策引擎</span>
+            </span>
+          </div>
+
+          <div class="campaign-boundary" role="note">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.7 3.2 7.7 8 9 4.8-1.3 8-4.3 8-9V7l-8-4Zm0 5v5M12 17h.01"/></svg>
+            <div>
+              <strong data-i18n="campaignBoundaryTitle">自动化边界</strong>
+              <span data-i18n="campaignBoundaryText">“规划下一步”仅处理本地数据。任何生成的阶段提案仍需人工审核、摘要确认和独立授权。</span>
+            </div>
+          </div>
+
+          <div class="campaign-layout">
+            <form class="campaign-form" id="campaign-form">
+              <div class="field-grid">
+                <label class="form-field">
+                  <span data-i18n="programName">SRC 项目名称</span>
+                  <input id="campaign-program" name="program" type="text" minlength="2" maxlength="200" required autocomplete="off" placeholder="例如：Safe Demo">
+                </label>
+                <label class="form-field">
+                  <span data-i18n="exactHost">精确主机</span>
+                  <input id="campaign-target" name="target" type="text" required autocomplete="off" placeholder="example.invalid" aria-describedby="target-help">
+                  <small id="target-help" data-i18n="exactHostHelp">只会加入这个精确主机，不推导子域名。</small>
+                </label>
+              </div>
+              <label class="form-field">
+                <span data-i18n="campaignObjective">研究目标</span>
+                <textarea id="campaign-objective" name="objective" minlength="8" maxlength="2000" required data-i18n-placeholder="campaignObjectivePlaceholder" placeholder="整理已有证据并优先验证最有价值的低影响假设。"></textarea>
+              </label>
+              <div class="field-grid field-grid--budget">
+                <label class="form-field">
+                  <span data-i18n="stageBudget">阶段预算</span>
+                  <input id="campaign-max-stages" name="maxStages" type="number" min="1" max="10" value="5" required>
+                </label>
+                <label class="form-field">
+                  <span data-i18n="requestBudget">总请求预算</span>
+                  <input id="campaign-max-requests" name="maxRequests" type="number" min="1" max="100" value="50" required>
+                </label>
+              </div>
+              <button class="button button--primary" id="create-campaign" type="submit">
+                <span class="button-label" data-i18n="createCampaign">创建本地智能任务</span>
+                <span class="button-spinner" aria-hidden="true"></span>
+              </button>
+            </form>
+
+            <div class="campaign-next" id="campaign-next" aria-live="polite">
+              <div class="campaign-next-empty" id="campaign-next-empty">
+                <span class="campaign-step">01</span>
+                <strong data-i18n="campaignEmptyTitle">先创建一个研究任务</strong>
+                <p data-i18n="campaignEmptyText">创建后点击“规划下一步”，系统会优先使用同项目的离线流量分析；没有证据时只生成两请求公开基线提案。</p>
+              </div>
+              <div class="campaign-next-result is-hidden" id="campaign-next-result">
+                <span class="campaign-step" id="campaign-next-kind">NEXT</span>
+                <strong id="campaign-next-title"></strong>
+                <p id="campaign-next-explanation"></p>
+                <div class="campaign-score-row">
+                  <span><b id="campaign-hypothesis-count">0</b> <span data-i18n="hypotheses">个假设</span></span>
+                  <span><b id="campaign-budget-used">0 / 0</b> <span data-i18n="requestsUsed">次请求</span></span>
+                </div>
+                <button class="button button--secondary is-hidden" id="download-proposal" type="button" data-i18n="downloadProposal">下载待授权提案</button>
+                <details class="campaign-feedback is-hidden" id="campaign-feedback">
+                  <summary data-i18n="recordOutcome">完成复核后记录结果</summary>
+                  <label class="form-field">
+                    <span data-i18n="reviewStatement">人工复核说明</span>
+                    <input id="campaign-decision-statement" type="text" minlength="8" maxlength="1000" required autocomplete="off" data-i18n-placeholder="reviewStatementPlaceholder" placeholder="说明证据、判断和停止位置。">
+                  </label>
+                  <label class="form-field campaign-request-count">
+                    <span data-i18n="actualRequests">本阶段实际请求数</span>
+                    <input id="campaign-consumed-requests" type="number" min="0" max="20" value="0">
+                  </label>
+                  <div class="campaign-feedback-actions">
+                    <button class="button button--secondary campaign-decision-button" type="button" data-disposition="supported" data-i18n="keepLead">保留有效线索</button>
+                    <button class="button button--secondary campaign-decision-button" type="button" data-disposition="rejected" data-i18n="rejectLead">排除该方向</button>
+                    <button class="button button--secondary campaign-decision-button" type="button" data-disposition="duplicate" data-i18n="duplicateLead">标记重复</button>
+                    <button class="button button--secondary campaign-decision-button" type="button" data-disposition="exhausted" data-i18n="exhaustLead">停止该方向</button>
+                  </div>
+                  <small data-i18n="outcomeBoundary">这里只更新假设队列，不会把线索标记为已确认漏洞或生成报告。</small>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <div class="campaign-list-heading">
+            <strong data-i18n="recentCampaigns">最近智能任务</strong>
+            <button class="icon-button" id="refresh-campaigns" type="button" aria-label="刷新智能任务" title="Refresh campaigns">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8A7 7 0 0 1 18 6l2 3M17.9 16A7 7 0 0 1 6 18l-2-3"/></svg>
+            </button>
+          </div>
+          <div class="campaign-list" id="campaign-list"></div>
+          <div class="campaign-list-empty" id="campaign-list-empty" data-i18n="noCampaigns">暂无智能任务。</div>
         </section>
 
         <section class="section-card validator-card" id="validator" aria-labelledby="validator-title">

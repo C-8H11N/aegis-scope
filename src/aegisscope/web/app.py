@@ -13,6 +13,13 @@ from fastapi.staticfiles import StaticFiles
 
 from aegisscope import __version__
 from aegisscope.analysis.engine import EvidenceAnalysisError, EvidenceAnalyzer
+from aegisscope.campaigns.models import (
+    CampaignCreateRequest,
+    CampaignDecisionRequest,
+    CampaignPlanRequest,
+)
+from aegisscope.campaigns.service import CampaignService, CampaignServiceError
+from aegisscope.campaigns.store import CampaignStore
 from aegisscope.config import Settings
 from aegisscope.contracts.models import JOB_ID_RE, PlannerInput, StageManifest
 from aegisscope.findings.models import FindingTransition
@@ -21,6 +28,7 @@ from aegisscope.findings.store import AnalystStore
 from aegisscope.i18n import MESSAGES
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
+from aegisscope.traffic.models import TrafficAnalysis
 
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -30,6 +38,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     orchestrator = Orchestrator(runtime)
     analyst_store = AnalystStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
     finding_service = FindingService(analyst_store)
+    campaign_store = CampaignStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
+    campaign_service = CampaignService(campaign_store)
     app = FastAPI(
         title="AegisScope Control Plane",
         description="Authorization-first SRC orchestration / 授权优先的 SRC 编排",
@@ -143,6 +153,83 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/findings")
     def list_findings(limit: int = 100) -> list[dict[str, Any]]:
         return [item.model_dump(mode="json") for item in analyst_store.list_findings(limit)]
+
+    @app.post("/api/v1/campaigns")
+    def create_campaign(request: CampaignCreateRequest) -> dict[str, Any]:
+        """Create a local planning campaign. This grants no target execution authority."""
+
+        campaign = campaign_service.create(request)
+        return campaign.model_dump(mode="json")
+
+    @app.get("/api/v1/campaigns")
+    def list_campaigns(limit: int = 100) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in campaign_store.list(limit)]
+
+    @app.get("/api/v1/campaigns/{campaign_id}")
+    def get_campaign(campaign_id: str) -> dict[str, Any]:
+        campaign = campaign_store.get(campaign_id)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="campaign not found")
+        return {
+            "campaign": campaign.model_dump(mode="json"),
+            "events": campaign_store.list_events(campaign_id),
+        }
+
+    @app.post("/api/v1/campaigns/{campaign_id}/plan")
+    def plan_campaign(campaign_id: str, request: CampaignPlanRequest) -> dict[str, Any]:
+        campaign = campaign_store.get(campaign_id)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="campaign not found")
+        analyses: list[TrafficAnalysis] = []
+        if request.analysis_ids:
+            for analysis_id in request.analysis_ids:
+                analysis = analyst_store.get_analysis(analysis_id)
+                if analysis is None:
+                    raise HTTPException(
+                        status_code=404, detail=f"traffic analysis not found: {analysis_id}"
+                    )
+                analyses.append(analysis)
+        else:
+            analyses = [
+                TrafficAnalysis.model_validate(payload)
+                for payload in analyst_store.list_analyses(100)
+                if payload.get("program_name") == campaign.program_name
+            ][:20]
+        try:
+            planned = campaign_service.plan(campaign_id, analyses)
+        except CampaignServiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return planned.model_dump(mode="json")
+
+    @app.post("/api/v1/campaigns/{campaign_id}/decisions")
+    def record_campaign_decision(
+        campaign_id: str, request: CampaignDecisionRequest
+    ) -> dict[str, Any]:
+        try:
+            campaign = campaign_service.record_decision(campaign_id, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CampaignServiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return campaign.model_dump(mode="json")
+
+    @app.get("/api/v1/campaigns/{campaign_id}/proposal")
+    def get_campaign_proposal(campaign_id: str) -> dict[str, Any]:
+        campaign = campaign_store.get(campaign_id)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="campaign not found")
+        hypothesis = next(
+            (
+                item
+                for item in campaign.hypotheses
+                if item.hypothesis_id == campaign.next_action.hypothesis_id
+                and item.proposal is not None
+            ),
+            None,
+        )
+        if hypothesis is None or hypothesis.proposal is None:
+            raise HTTPException(status_code=404, detail="campaign has no pending stage proposal")
+        return hypothesis.proposal.model_dump(mode="json")
 
     @app.get("/api/v1/findings/{finding_id}")
     def get_finding(finding_id: str) -> dict[str, Any]:

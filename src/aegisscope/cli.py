@@ -16,6 +16,9 @@ from rich.table import Table
 
 from aegisscope import __version__
 from aegisscope.analysis.engine import EvidenceAnalysisError, EvidenceAnalyzer
+from aegisscope.campaigns.models import CampaignCreateRequest, CampaignDecisionRequest
+from aegisscope.campaigns.service import CampaignService, CampaignServiceError
+from aegisscope.campaigns.store import CampaignStore
 from aegisscope.config import Settings
 from aegisscope.contracts.models import (
     JOB_ID_RE,
@@ -24,10 +27,10 @@ from aegisscope.contracts.models import (
     StageManifest,
     StageProposal,
 )
-from aegisscope.i18n import translate
 from aegisscope.findings.models import FindingStatus, FindingTransition
 from aegisscope.findings.service import FindingLifecycleError, FindingService
 from aegisscope.findings.store import AnalystStore
+from aegisscope.i18n import translate
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
 from aegisscope.reporting import ReportLanguage, load_report_template
@@ -36,6 +39,7 @@ from aegisscope.security.integrity import atomic_write_new_text, canonical_sha25
 from aegisscope.transport.ssh import OpenSshTransport
 from aegisscope.traffic.analyzer import TrafficAnalysisError, TrafficAnalyzer
 from aegisscope.traffic.importer import TrafficImportError, TrafficImporter
+from aegisscope.traffic.models import TrafficAnalysis
 
 app = typer.Typer(
     name="aegisscope",
@@ -63,6 +67,11 @@ def _write_model(path: Path, model: Any) -> None:
 def _analyst_store(settings: Settings) -> AnalystStore:
     settings.ensure_local_directories()
     return AnalystStore(settings.data_dir / "db" / "aegisscope.sqlite3")
+
+
+def _campaign_store(settings: Settings) -> CampaignStore:
+    settings.ensure_local_directories()
+    return CampaignStore(settings.data_dir / "db" / "aegisscope.sqlite3")
 
 
 @app.command("version")
@@ -308,6 +317,142 @@ def traffic_analyze(
         f"new findings / 新记录: {created}; confirmed / 已确认: 0[/green]"
     )
     console.print(str(paths[0]))
+
+
+@app.command("campaign-create")
+def campaign_create(
+    specification: Path = typer.Argument(..., help="CampaignCreateRequest JSON file"),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Create a local autonomous planning campaign / 创建本地自主规划任务。"""
+
+    settings = Settings.from_env()
+    try:
+        request = CampaignCreateRequest.model_validate(_load_object(specification))
+        campaign = CampaignService(_campaign_store(settings)).create(request)
+        if output:
+            _write_model(output, campaign)
+    except (ValueError, FileExistsError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Campaign / 研究任务: {campaign.campaign_id}[/green]")
+    console.print("Local planning only; target execution is not authorized.")
+
+
+@app.command("campaign-plan")
+def campaign_plan(
+    campaign_id: str,
+    analysis_id: list[str] | None = typer.Option(None, "--analysis-id"),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Rank evidence and select one bounded next action / 排序证据并选择下一步。"""
+
+    settings = Settings.from_env()
+    analyst_store = _analyst_store(settings)
+    campaign_store = _campaign_store(settings)
+    campaign = campaign_store.get(campaign_id)
+    if campaign is None:
+        console.print("[red]Unknown campaign_id / 未知研究任务[/red]")
+        raise typer.Exit(2)
+    analyses: list[TrafficAnalysis] = []
+    if analysis_id:
+        for identity in analysis_id:
+            analysis = analyst_store.get_analysis(identity)
+            if analysis is None:
+                console.print(f"[red]Unknown analysis_id: {identity}[/red]")
+                raise typer.Exit(2)
+            analyses.append(analysis)
+    else:
+        analyses = [
+            TrafficAnalysis.model_validate(payload)
+            for payload in analyst_store.list_analyses(100)
+            if payload.get("program_name") == campaign.program_name
+        ][:20]
+    try:
+        planned = CampaignService(campaign_store).plan(campaign_id, analyses)
+        if output:
+            _write_model(output, planned)
+    except (CampaignServiceError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]{planned.status.value}: {planned.next_action.kind.value}[/green]")
+    console.print(planned.next_action.title.zh_cn)
+    console.print("No target request was sent / 未发送任何目标请求")
+
+
+@app.command("campaign-list")
+def campaign_list(limit: int = typer.Option(100, min=1, max=500)) -> None:
+    """List local campaigns / 列出本地研究任务。"""
+
+    settings = Settings.from_env()
+    table = Table(title="Campaigns / 研究任务")
+    for heading in ("ID", "Target", "Status", "Hypotheses", "Next action"):
+        table.add_column(heading)
+    for campaign in _campaign_store(settings).list(limit):
+        table.add_row(
+            campaign.campaign_id,
+            campaign.target_host,
+            campaign.status.value,
+            str(len(campaign.hypotheses)),
+            campaign.next_action.kind.value,
+        )
+    console.print(table)
+
+
+@app.command("campaign-export-proposal")
+def campaign_export_proposal(
+    campaign_id: str,
+    output: Path = typer.Option(Path("campaign-proposal.json"), "--output"),
+) -> None:
+    """Export the pending unapproved proposal / 导出待人工授权的阶段提案。"""
+
+    settings = Settings.from_env()
+    campaign = _campaign_store(settings).get(campaign_id)
+    if campaign is None:
+        console.print("[red]Unknown campaign_id / 未知研究任务[/red]")
+        raise typer.Exit(2)
+    hypothesis = next(
+        (
+            item
+            for item in campaign.hypotheses
+            if item.hypothesis_id == campaign.next_action.hypothesis_id
+            and item.proposal is not None
+        ),
+        None,
+    )
+    if hypothesis is None or hypothesis.proposal is None:
+        console.print("[red]Campaign has no pending stage proposal.[/red]")
+        raise typer.Exit(2)
+    _write_model(output, hypothesis.proposal)
+    console.print(f"[green]Proposal / 待授权提案: {output}[/green]")
+    console.print("Use `aegisscope authorize` after human review; no network request was sent.")
+
+
+@app.command("campaign-decision")
+def campaign_decision(
+    campaign_id: str,
+    hypothesis_id: str = typer.Option(..., "--hypothesis-id"),
+    disposition: str = typer.Option(..., "--disposition"),
+    statement: str = typer.Option(..., "--statement"),
+    consumed_requests: int = typer.Option(0, "--consumed-requests", min=0, max=20),
+) -> None:
+    """Record a human-reviewed result and continue planning / 记录人工结论并继续规划。"""
+
+    settings = Settings.from_env()
+    try:
+        request = CampaignDecisionRequest(
+            hypothesis_id=hypothesis_id,
+            disposition=cast(Any, disposition),
+            statement=statement,
+            consumed_requests=consumed_requests,
+        )
+        campaign = CampaignService(_campaign_store(settings)).record_decision(
+            campaign_id, request
+        )
+    except (CampaignServiceError, KeyError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]{campaign.status.value}: {campaign.next_action.kind.value}[/green]")
 
 
 @app.command("finding-list")

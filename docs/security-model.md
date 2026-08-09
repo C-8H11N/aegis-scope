@@ -13,6 +13,14 @@
 - Write-once evidence with a hashed index / 不可覆盖证据与哈希索引；
 - Immediate bounded stop conditions / 明确且立即生效的停止条件。
 
+Campaign planning adds cumulative caps of at most ten stages and one hundred requests. These are
+planning budgets, not authorization. Every generated proposal remains `dry_run: true`, records
+`authorization_required: true`, and must pass the existing independent stage-authorization flow.
+
+Campaign 规划最多允许十个阶段和一百次累计请求。该预算不是目标授权。所有自动生成的
+提案始终为 `dry_run: true`、`authorization_required: true`，并必须经过现有的独立阶段
+授权流程。
+
 ## Prompt injection / 提示词注入
 
 Program rules, model output, target content, Burp captures, logs, and downloaded JavaScript are

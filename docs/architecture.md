@@ -23,6 +23,12 @@ records. Deterministic comparison correlates endpoints, roles, JSON shapes, and 
 fingerprints. SQLite stores candidates and append-only lifecycle events. Candidates remain
 non-reportable until a valid human transition records concrete impact and evidence references.
 
+The campaign layer sits above this analyst path. It stores a bounded queue for one exact host,
+deduplicates candidate fingerprints, ranks the remaining hypotheses, and exposes one next action.
+It may create a strict `StageProposal`, but it has no transport reference and cannot create an
+authorization record. Authentication-dependent hypotheses are deliberately routed to manual
+Burp review instead of being replayed by the credential-free runner.
+
 ## 中文
 
 AegisScope 在一个仓库中划分三个信任域：
@@ -41,3 +47,7 @@ AegisScope 在一个仓库中划分三个信任域：
 主机允许列表过滤，再转换为脱敏派生记录。确定性分析只关联接口、角色、JSON 结构和
 重复指纹；SQLite 保存候选项与追加式生命周期事件。只有有效的人工状态变更记录了
 具体影响和证据索引后，候选项才具备报告资格。
+
+Campaign 层位于分析员链路之上：它为单个精确主机保存有界假设队列，对候选指纹去重并
+选择一个最有价值的下一动作。它可以生成严格 `StageProposal`，但不持有传输能力，也不能
+创建授权记录。依赖认证的假设会明确转交人工 Burp 复核，不会由无凭据 Runner 自动重放。

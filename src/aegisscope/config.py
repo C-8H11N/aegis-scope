@@ -56,5 +56,6 @@ class Settings:
             "reports",
             "imports",
             "traffic-analyses",
+            "campaigns",
         ):
             (self.data_dir / relative).mkdir(parents=True, exist_ok=True)

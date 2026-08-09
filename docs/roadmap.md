@@ -24,6 +24,14 @@
 - Next: richer object-level authorization and business-flow views / 下一步：更丰富的对象级权限与业务流程视图；
 - Provider plugins with local-model support / Provider 插件与本地模型支持。
 
+## 0.4 - Autonomous Campaign Mode / 自主研究任务模式
+
+- Completed: exact-host campaign state and cumulative request/stage budgets / 已完成精确主机任务状态与累计预算；
+- Completed: deterministic evidence-to-hypothesis ranking and deduplication / 已完成证据到假设的确定性排序与去重；
+- Completed: one-next-action planner with safe manual routing / 已完成单一下一动作规划与安全人工分流；
+- Completed: bilingual Campaign CLI, API, and dashboard / 已完成双语 Campaign CLI、API 与控制台；
+- Next: signed authorization bundles and loopback end-to-end campaign simulation / 下一步为签名授权包与本地回环端到端模拟。
+
 ## 1.0 - Stable authorization platform / 稳定授权平台
 
 - Versioned protocol compatibility / 版本化协议兼容；

@@ -4,6 +4,7 @@ const translations = {
   "zh-CN": {
     skip: "跳到主要内容",
     navOverview: "总览",
+    navCampaigns: "智能任务",
     navValidator: "清单校验",
     navJobs: "审计记录",
     navFindings: "线索台账",
@@ -32,6 +33,50 @@ const translations = {
     auditStored: "SQLite 审计留痕",
     findingRecords: "漏洞线索",
     humanReviewedOnly: "确认与报告必须人工审核",
+    campaignRecords: "智能任务",
+    planningOnly: "离线规划，不自动执行",
+    campaignEyebrow: "AUTONOMOUS CAMPAIGN · 自主研究编排",
+    campaignsTitle: "让系统记住目标，并自动选择下一步",
+    campaignsDescription: "基于已有脱敏证据自动去重、排序假设和控制总预算。系统只生成待授权提案；不会连接 Kali、发送目标请求或自动认定漏洞。",
+    offlinePlanner: "离线决策引擎",
+    campaignBoundaryTitle: "自动化边界",
+    campaignBoundaryText: "“规划下一步”仅处理本地数据。任何生成的阶段提案仍需人工审核、摘要确认和独立授权。",
+    programName: "SRC 项目名称",
+    exactHost: "精确主机",
+    exactHostHelp: "只会加入这个精确主机，不推导子域名。",
+    campaignObjective: "研究目标",
+    campaignObjectivePlaceholder: "整理已有证据并优先验证最有价值的低影响假设。",
+    stageBudget: "阶段预算",
+    requestBudget: "总请求预算",
+    createCampaign: "创建本地智能任务",
+    campaignEmptyTitle: "先创建一个研究任务",
+    campaignEmptyText: "创建后点击“规划下一步”，系统会优先使用同项目的离线流量分析；没有证据时只生成两请求公开基线提案。",
+    hypotheses: "个假设",
+    requestsUsed: "次请求",
+    downloadProposal: "下载待授权提案",
+    recordOutcome: "完成复核后记录结果",
+    reviewStatement: "人工复核说明",
+    reviewStatementPlaceholder: "说明证据、判断和停止位置。",
+    actualRequests: "本阶段实际请求数",
+    keepLead: "保留有效线索",
+    rejectLead: "排除该方向",
+    duplicateLead: "标记重复",
+    exhaustLead: "停止该方向",
+    outcomeBoundary: "这里只更新假设队列，不会把线索标记为已确认漏洞或生成报告。",
+    campaignDecisionSaved: "人工结论已记录，下一动作已重新计算。",
+    recentCampaigns: "最近智能任务",
+    noCampaigns: "暂无智能任务。",
+    planNext: "规划下一步",
+    campaignCreated: "智能任务已在本地创建，没有发送目标请求。",
+    campaignPlanned: "离线规划完成，没有发送目标请求。",
+    readyCampaignStatus: "待规划",
+    planningCampaignStatus: "规划中",
+    awaitingAuthorizationStatus: "待阶段授权",
+    manualReviewCampaignStatus: "需人工复核",
+    completedCampaignStatus: "已完成",
+    budgetExhaustedStatus: "预算已耗尽",
+    stoppedCampaignStatus: "已安全停止",
+    refreshCampaignsLabel: "刷新智能任务",
     policyGate: "确定性策略门",
     validatorTitle: "阶段清单校验器",
     validatorDescription: "导入 JSON 清单并在本地检查授权、精确范围、请求上限与停止条件。校验不会访问目标。",
@@ -117,6 +162,7 @@ const translations = {
   en: {
     skip: "Skip to main content",
     navOverview: "Overview",
+    navCampaigns: "Campaigns",
     navValidator: "Manifest validator",
     navJobs: "Audit trail",
     navFindings: "Finding ledger",
@@ -145,6 +191,50 @@ const translations = {
     auditStored: "SQLite audit trail",
     findingRecords: "Finding candidates",
     humanReviewedOnly: "Confirmation and reports require human review",
+    campaignRecords: "Smart campaigns",
+    planningOnly: "Offline planning, no auto execution",
+    campaignEyebrow: "AUTONOMOUS CAMPAIGN · RESEARCH ORCHESTRATION",
+    campaignsTitle: "Keep research context and choose the next step automatically",
+    campaignsDescription: "Deduplicate evidence, rank hypotheses, and enforce a total budget. The engine only creates unapproved proposals; it never contacts Kali, sends a target request, or confirms a vulnerability.",
+    offlinePlanner: "Offline decision engine",
+    campaignBoundaryTitle: "Automation boundary",
+    campaignBoundaryText: "Plan next step processes local data only. Every generated stage proposal still requires human review, digest confirmation, and separate authorization.",
+    programName: "SRC program name",
+    exactHost: "Exact host",
+    exactHostHelp: "Only this exact host is included; subdomains are never inferred.",
+    campaignObjective: "Research objective",
+    campaignObjectivePlaceholder: "Organize existing evidence and prioritize the highest-value low-impact hypothesis.",
+    stageBudget: "Stage budget",
+    requestBudget: "Total request budget",
+    createCampaign: "Create local smart campaign",
+    campaignEmptyTitle: "Create a research campaign first",
+    campaignEmptyText: "Then select Plan next step. Matching offline traffic analysis is preferred; without evidence, only a two-request public baseline proposal is created.",
+    hypotheses: "hypotheses",
+    requestsUsed: "requests",
+    downloadProposal: "Download unapproved proposal",
+    recordOutcome: "Record the outcome after review",
+    reviewStatement: "Human review statement",
+    reviewStatementPlaceholder: "Describe the evidence, decision, and stopping point.",
+    actualRequests: "Actual requests in this stage",
+    keepLead: "Keep as a supported lead",
+    rejectLead: "Reject this direction",
+    duplicateLead: "Mark duplicate",
+    exhaustLead: "Stop this direction",
+    outcomeBoundary: "This only updates the hypothesis queue. It never confirms a vulnerability or creates a report.",
+    campaignDecisionSaved: "Human decision recorded and the next action recalculated.",
+    recentCampaigns: "Recent smart campaigns",
+    noCampaigns: "No smart campaigns yet.",
+    planNext: "Plan next step",
+    campaignCreated: "Campaign created locally. No target request was sent.",
+    campaignPlanned: "Offline planning completed. No target request was sent.",
+    readyCampaignStatus: "Ready to plan",
+    planningCampaignStatus: "Planning",
+    awaitingAuthorizationStatus: "Needs stage authorization",
+    manualReviewCampaignStatus: "Needs human review",
+    completedCampaignStatus: "Completed",
+    budgetExhaustedStatus: "Budget exhausted",
+    stoppedCampaignStatus: "Safely stopped",
+    refreshCampaignsLabel: "Refresh campaigns",
     policyGate: "Deterministic policy gate",
     validatorTitle: "Stage manifest validator",
     validatorDescription: "Import JSON and check authorization, exact scope, request caps, and stop conditions locally. Validation never contacts a target.",
@@ -235,6 +325,8 @@ const state = {
   manifest: null,
   decision: null,
   valid: false,
+  activeCampaign: null,
+  campaignProposal: null,
   toastTimer: null
 };
 
@@ -260,6 +352,28 @@ const elements = {
   runnerAlias: document.querySelector("#runner-alias"),
   jobCount: document.querySelector("#job-count"),
   findingCount: document.querySelector("#finding-count"),
+  campaignCount: document.querySelector("#campaign-count"),
+  campaignForm: document.querySelector("#campaign-form"),
+  campaignProgram: document.querySelector("#campaign-program"),
+  campaignTarget: document.querySelector("#campaign-target"),
+  campaignObjective: document.querySelector("#campaign-objective"),
+  campaignMaxStages: document.querySelector("#campaign-max-stages"),
+  campaignMaxRequests: document.querySelector("#campaign-max-requests"),
+  createCampaign: document.querySelector("#create-campaign"),
+  campaignNextEmpty: document.querySelector("#campaign-next-empty"),
+  campaignNextResult: document.querySelector("#campaign-next-result"),
+  campaignNextKind: document.querySelector("#campaign-next-kind"),
+  campaignNextTitle: document.querySelector("#campaign-next-title"),
+  campaignNextExplanation: document.querySelector("#campaign-next-explanation"),
+  campaignHypothesisCount: document.querySelector("#campaign-hypothesis-count"),
+  campaignBudgetUsed: document.querySelector("#campaign-budget-used"),
+  downloadProposal: document.querySelector("#download-proposal"),
+  campaignFeedback: document.querySelector("#campaign-feedback"),
+  campaignDecisionStatement: document.querySelector("#campaign-decision-statement"),
+  campaignConsumedRequests: document.querySelector("#campaign-consumed-requests"),
+  campaignList: document.querySelector("#campaign-list"),
+  campaignListEmpty: document.querySelector("#campaign-list-empty"),
+  refreshCampaigns: document.querySelector("#refresh-campaigns"),
   jobsBody: document.querySelector("#jobs-body"),
   jobsEmpty: document.querySelector("#jobs-empty"),
   refreshJobs: document.querySelector("#refresh-jobs"),
@@ -279,12 +393,19 @@ function applyLanguage() {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
+  });
   elements.themeToggle.setAttribute("aria-label", t("themeLabel"));
   elements.languageToggle.setAttribute("aria-label", t("languageLabel"));
   elements.refreshJobs.setAttribute("aria-label", t("refreshLabel"));
   elements.refreshFindings.setAttribute("aria-label", t("refreshFindingsLabel"));
+  elements.refreshCampaigns.setAttribute("aria-label", t("refreshCampaignsLabel"));
   if (state.decision) {
     renderValidation(state.decision);
+  }
+  if (state.activeCampaign) {
+    renderCampaignNext(state.activeCampaign);
   }
 }
 
@@ -638,6 +759,222 @@ async function loadFindings(showErrors = false) {
   }
 }
 
+function campaignStatusName(status) {
+  const names = {
+    ready: "readyCampaignStatus",
+    planning: "planningCampaignStatus",
+    awaiting_stage_authorization: "awaitingAuthorizationStatus",
+    manual_review: "manualReviewCampaignStatus",
+    completed: "completedCampaignStatus",
+    budget_exhausted: "budgetExhaustedStatus",
+    stopped: "stoppedCampaignStatus"
+  };
+  return names[status] ? t(names[status]) : String(status || "—");
+}
+
+function localized(value) {
+  if (!value || typeof value !== "object") {
+    return "—";
+  }
+  return String(value[state.language === "zh-CN" ? "zh_cn" : "en"] || "—");
+}
+
+function renderCampaignNext(campaign) {
+  const next = campaign && typeof campaign.next_action === "object"
+    ? campaign.next_action
+    : null;
+  if (!next) {
+    elements.campaignNextEmpty.classList.remove("is-hidden");
+    elements.campaignNextResult.classList.add("is-hidden");
+    return;
+  }
+  state.activeCampaign = campaign;
+  elements.campaignNextEmpty.classList.add("is-hidden");
+  elements.campaignNextResult.classList.remove("is-hidden");
+  elements.campaignNextKind.textContent = String(next.kind || "NEXT").replaceAll("_", " ");
+  elements.campaignNextTitle.textContent = localized(next.title);
+  elements.campaignNextExplanation.textContent = localized(next.explanation);
+  elements.campaignHypothesisCount.textContent = String(
+    Array.isArray(campaign.hypotheses) ? campaign.hypotheses.length : 0
+  );
+  const budget = campaign && typeof campaign.budget === "object" ? campaign.budget : {};
+  elements.campaignBudgetUsed.textContent = `${Number(budget.used_requests || 0)} / ${Number(budget.max_total_requests || 0)}`;
+  const downloadable = next.kind === "authorize_stage" && Boolean(next.proposal_id);
+  elements.downloadProposal.classList.toggle("is-hidden", !downloadable);
+  elements.downloadProposal.disabled = !downloadable;
+  const reviewable = ["authorize_stage", "manual_review"].includes(next.kind);
+  elements.campaignFeedback.classList.toggle("is-hidden", !reviewable);
+}
+
+function renderCampaigns(campaigns) {
+  elements.campaignList.replaceChildren();
+  const safeCampaigns = Array.isArray(campaigns) ? campaigns : [];
+  elements.campaignCount.textContent = String(safeCampaigns.length);
+  elements.campaignListEmpty.classList.toggle("is-hidden", safeCampaigns.length > 0);
+
+  safeCampaigns.forEach((campaign) => {
+    const card = document.createElement("article");
+    card.className = "campaign-row";
+
+    const identity = document.createElement("div");
+    identity.className = "campaign-identity";
+    const program = document.createElement("strong");
+    program.textContent = String(campaign.program_name || "—");
+    const target = document.createElement("code");
+    target.textContent = String(campaign.target_host || "—");
+    identity.append(program, target);
+
+    const status = document.createElement("span");
+    status.className = `campaign-status campaign-status-${String(campaign.status || "ready")}`;
+    status.textContent = campaignStatusName(campaign.status);
+
+    const budget = document.createElement("div");
+    budget.className = "campaign-budget";
+    const budgetValue = campaign && typeof campaign.budget === "object" ? campaign.budget : {};
+    budget.textContent = `${Number(budgetValue.used_requests || 0)} / ${Number(budgetValue.max_total_requests || 0)}`;
+
+    const next = document.createElement("div");
+    next.className = "campaign-next-label";
+    next.textContent = localized(campaign.next_action && campaign.next_action.title);
+
+    const actions = document.createElement("div");
+    actions.className = "campaign-row-actions";
+    const plan = document.createElement("button");
+    plan.type = "button";
+    plan.className = "button button--secondary campaign-plan-button";
+    plan.dataset.campaignId = String(campaign.campaign_id || "");
+    plan.textContent = t("planNext");
+    actions.appendChild(plan);
+
+    card.append(identity, status, budget, next, actions);
+    elements.campaignList.appendChild(card);
+  });
+}
+
+async function loadCampaigns(showErrors = false) {
+  try {
+    const campaigns = await apiRequest("/api/v1/campaigns?limit=50");
+    renderCampaigns(campaigns);
+  } catch (_error) {
+    elements.campaignCount.textContent = "—";
+    if (showErrors) {
+      showToast(t("requestFailed"));
+    }
+  }
+}
+
+async function createCampaign(event) {
+  event.preventDefault();
+  if (!elements.campaignForm.reportValidity()) {
+    return;
+  }
+  const target = elements.campaignTarget.value.trim().toLowerCase().replace(/\.$/, "");
+  const payload = {
+    program_name: elements.campaignProgram.value.trim(),
+    target_host: target,
+    allowlist: [target],
+    denylist: [],
+    objective: elements.campaignObjective.value.trim(),
+    max_stages: Number(elements.campaignMaxStages.value),
+    max_total_requests: Number(elements.campaignMaxRequests.value)
+  };
+  setBusy(elements.createCampaign, true);
+  try {
+    const campaign = await apiRequest("/api/v1/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    renderCampaignNext(campaign);
+    showToast(t("campaignCreated"));
+    await loadCampaigns();
+  } catch (error) {
+    showToast(`${t("requestFailed")}: ${error.message}`);
+  } finally {
+    setBusy(elements.createCampaign, false);
+  }
+}
+
+async function planCampaign(campaignId, button = null) {
+  if (button) {
+    setBusy(button, true);
+  }
+  try {
+    const campaign = await apiRequest(`/api/v1/campaigns/${encodeURIComponent(campaignId)}/plan`, {
+      method: "POST",
+      body: JSON.stringify({ analysis_ids: [] })
+    });
+    state.campaignProposal = null;
+    renderCampaignNext(campaign);
+    showToast(t("campaignPlanned"));
+    await loadCampaigns();
+  } catch (error) {
+    showToast(`${t("requestFailed")}: ${error.message}`);
+  } finally {
+    if (button) {
+      setBusy(button, false);
+    }
+  }
+}
+
+async function downloadCampaignProposal() {
+  if (!state.activeCampaign) {
+    return;
+  }
+  try {
+    const proposal = await apiRequest(
+      `/api/v1/campaigns/${encodeURIComponent(state.activeCampaign.campaign_id)}/proposal`
+    );
+    state.campaignProposal = proposal;
+    const blob = new Blob([JSON.stringify(proposal, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${proposal.proposal_id || "campaign-proposal"}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showToast(`${t("requestFailed")}: ${error.message}`);
+  }
+}
+
+async function recordCampaignDecision(button) {
+  const campaign = state.activeCampaign;
+  const next = campaign && campaign.next_action;
+  const statement = elements.campaignDecisionStatement.value.trim();
+  if (!next || !next.hypothesis_id || statement.length < 8) {
+    elements.campaignDecisionStatement.reportValidity();
+    elements.campaignDecisionStatement.focus();
+    return;
+  }
+  setBusy(button, true);
+  try {
+    const updated = await apiRequest(
+      `/api/v1/campaigns/${encodeURIComponent(campaign.campaign_id)}/decisions`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          hypothesis_id: next.hypothesis_id,
+          disposition: button.dataset.disposition,
+          statement,
+          consumed_requests: Number(elements.campaignConsumedRequests.value || 0)
+        })
+      }
+    );
+    elements.campaignDecisionStatement.value = "";
+    elements.campaignConsumedRequests.value = "0";
+    elements.campaignFeedback.open = false;
+    renderCampaignNext(updated);
+    showToast(t("campaignDecisionSaved"));
+    await loadCampaigns();
+  } catch (error) {
+    showToast(`${t("requestFailed")}: ${error.message}`);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
 async function loadSystemStatus() {
   const results = await Promise.allSettled([
     apiRequest("/health"),
@@ -695,7 +1032,7 @@ elements.languageToggle.addEventListener("click", async () => {
   state.language = state.language === "zh-CN" ? "en" : "zh-CN";
   localStorage.setItem("aegisscope-language", state.language);
   applyLanguage();
-  await Promise.all([loadSystemStatus(), loadJobs(), loadFindings()]);
+  await Promise.all([loadSystemStatus(), loadJobs(), loadFindings(), loadCampaigns()]);
 });
 
 elements.manifestInput.addEventListener("input", invalidateManifest);
@@ -731,6 +1068,19 @@ elements.validateManifest.addEventListener("click", validateCurrentManifest);
 elements.prepareJob.addEventListener("click", prepareCurrentJob);
 elements.refreshJobs.addEventListener("click", () => loadJobs(true));
 elements.refreshFindings.addEventListener("click", () => loadFindings(true));
+elements.campaignForm.addEventListener("submit", createCampaign);
+elements.refreshCampaigns.addEventListener("click", () => loadCampaigns(true));
+elements.downloadProposal.addEventListener("click", downloadCampaignProposal);
+document.querySelectorAll(".campaign-decision-button").forEach((button) => {
+  button.addEventListener("click", () => recordCampaignDecision(button));
+});
+elements.campaignList.addEventListener("click", (event) => {
+  const button = event.target.closest(".campaign-plan-button");
+  if (!button || !button.dataset.campaignId) {
+    return;
+  }
+  planCampaign(button.dataset.campaignId, button);
+});
 
 applyTheme();
 applyLanguage();
@@ -738,3 +1088,4 @@ installNavigationObserver();
 loadSystemStatus();
 loadJobs();
 loadFindings();
+loadCampaigns();

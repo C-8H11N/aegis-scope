@@ -25,7 +25,7 @@
 </p>
 
 > [!IMPORTANT]
-> AegisScope can automatically discover and rank vulnerability leads, but it is not an autonomous attack agent. Connecting a model API does not grant target authorization. The model can only create proposals; deterministic policy and explicit approval control every executable stage.
+> AegisScope can automatically discover and rank vulnerability leads, while Campaign mode preserves research state, budgets, and the next action. It is not an autonomous attack agent. Connecting a model API does not grant target authorization. Models and campaigns only create proposals; deterministic policy and explicit approval control every executable stage.
 
 ## One-click start on Windows
 
@@ -63,6 +63,7 @@ The local bilingual dashboard provides:
 - local job preparation only after policy validation succeeds;
 - a SQLite-backed audit list;
 - automatic candidate and observation counts from downloaded evidence;
+- exact-host Campaigns that rank existing leads, enforce cumulative budgets, and show one next action;
 - explicit wording that local preparation does not dispatch to Kali or contact a target.
 
 The dashboard intentionally has **no direct target-execution button**.
@@ -81,6 +82,7 @@ The dashboard intentionally has **no direct target-execution button**.
 | Evidence | Sensitive header/text redaction and bounded response collection |
 | Auto triage | Offline ranking of directory listing, verbose error, source map, header, and CORS leads |
 | Traffic intelligence | Redact HAR/Burp XML before persistence, then compare normalized endpoints, roles, status, and JSON shape |
+| Campaign orchestration | Preserve exact-host research state and rank the next action by risk, confidence, novelty, evidence, and cost |
 | Submission deduplication | Flag likely same-code environments using method, path, status class, response shape, and technical posture |
 | Finding lifecycle | `candidate → needs validation → human confirmed → submitted/fixed`; candidates cannot produce reports |
 | Integrity | Cross-end manifest SHA-256, replay prevention, evidence indexes, and file hashes |
@@ -101,7 +103,8 @@ flowchart LR
     P2 -->|"safe stage only"| E["Bounded low-impact executor"]
     E --> D["Redacted evidence"]
     D --> A["Offline candidate analysis + deduplication"]
-    A --> W
+    A --> C["Campaign hypothesis queue + budget"]
+    C -->|"one next action"| W
 ```
 
 No daemon or new listening port is required on Kali. The Windows app listens on loopback only.
@@ -184,6 +187,10 @@ aegisscope runner-dry-run .\examples\safe-demo\stage.json
 aegisscope analyze-evidence .\var\evidence\<job-id>
 aegisscope traffic-import D:\captures\capture.har --program-name "Authorized Program" --allow-host example.invalid --role guest
 aegisscope traffic-analyze .\var\imports\<import-id>\traffic.json
+aegisscope campaign-create .\examples\safe-demo\campaign.json
+aegisscope campaign-list
+aegisscope campaign-plan <campaign-id>
+aegisscope campaign-export-proposal <campaign-id> --output proposal.json
 aegisscope finding-list
 aegisscope finding-transition <finding-id> --to needs_validation --statement "Human review completed; request minimal validation."
 aegisscope finding-report <finding-id> --language en --output report.md
@@ -207,6 +214,16 @@ The included demo targets `example.invalid` and remains `dry_run: true`.
 6. Only `confirmed`, `submitted`, or `fixed` findings can produce Chinese or English reports with `finding-report`.
 
 Traffic analysis never replays HTTP requests or copies raw cookies, tokens, request bodies, or sensitive response values into the project.
+
+### Autonomous Campaign workflow
+
+1. Create a campaign in the dashboard with a program name, one exact host, an objective, and cumulative budgets.
+2. Select **Plan next step**. The engine reads matching redacted traffic analysis, deduplicates candidates, and ranks hypotheses.
+3. Public credential-free observations may produce a strict `dry_run` proposal. Authentication, role, and object-authorization leads are routed to manual Burp review.
+4. Download and review the proposal, then use `aegisscope authorize` to record separate stage authorization.
+5. Record the human disposition and actual request count; the campaign selects the next open hypothesis until completion or budget exhaustion.
+
+Campaign creation, planning, and proposal download are local-only and never contact Kali or a target. See [Campaign mode](docs/campaign-mode.md).
 
 ## Configuration
 
@@ -235,6 +252,7 @@ aegis-scope/
 │   ├── runner/                # Constrained Kali executor
 │   ├── analysis/              # Offline candidate discovery, ranking, and deduplication
 │   ├── traffic/               # Redacted HAR/Burp import, role diffing, and duplicate clustering
+│   ├── campaigns/             # Hypothesis ranking, cumulative budgets, next action, and audit state
 │   ├── findings/              # Human-governed lifecycle and report gate
 │   ├── transport/             # Fixed SSH/SCP transport
 │   ├── providers/             # Proposal-only model adapters
@@ -259,6 +277,9 @@ Interactive documentation is available at `/docs` while the local service is run
 | `POST /api/v1/jobs/{job_id}/analyze` | Analyze downloaded evidence offline; sends no requests |
 | `GET /api/v1/traffic/imports` | Read redacted derived traffic imports |
 | `GET /api/v1/traffic/analyses` | Read offline traffic diffs and duplicate hints |
+| `POST /api/v1/campaigns` | Create a local Campaign without target execution authority |
+| `POST /api/v1/campaigns/{id}/plan` | Rank offline evidence and select one next action |
+| `GET /api/v1/campaigns/{id}/proposal` | Download a strict proposal that still needs separate authorization |
 | `GET /api/v1/findings` | Read local candidates and human-reviewed state |
 | `POST /api/v1/findings/{finding_id}/transition` | Record a constrained human lifecycle transition |
 | `POST /api/v1/proposals` | Create an unapproved model proposal |
@@ -276,7 +297,7 @@ Pull requests are welcome. Read [Contributing](CONTRIBUTING.md), [Code of Conduc
 
 ## Project status
 
-AegisScope is an alpha, offline-first foundation. It automatically discovers and deduplicates candidates and proposes minimal validation directions, but tool output remains a lead until a human validates server-side impact.
+AegisScope `0.4.0` is an alpha, offline-first foundation. It discovers and deduplicates candidates, preserves Campaign state, and proposes minimal validation directions, but tool output remains a lead until a human validates server-side impact.
 
 Planned work:
 
