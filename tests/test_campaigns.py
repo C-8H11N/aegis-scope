@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from aegisscope.analysis.models import Confidence, LocalizedText, SeverityHint
+from aegisscope.analysis.models import (
+    Confidence,
+    EvidenceAnalysis,
+    LocalizedText,
+    SeverityHint,
+)
 from aegisscope.campaigns.models import (
     CampaignCreateRequest,
     CampaignDecisionRequest,
@@ -15,6 +20,10 @@ from aegisscope.campaigns.models import (
 )
 from aegisscope.campaigns.service import CampaignService, CampaignServiceError
 from aegisscope.campaigns.store import CampaignStore
+from aegisscope.contracts.models import Authorization, StageManifest
+from aegisscope.contracts.results import RequestResult, StageStatus, StageSummary
+from aegisscope.security.integrity import canonical_sha256
+from aegisscope.storage import JobStore
 from aegisscope.traffic.models import (
     TrafficAnalysis,
     TrafficCandidate,
@@ -166,3 +175,123 @@ def test_human_disposition_advances_queue_and_enforces_budget(tmp_path: Path) ->
                 consumed_requests=0,
             ),
         )
+
+
+def test_local_job_summary_flows_back_without_double_counting(tmp_path: Path) -> None:
+    database = tmp_path / "aegisscope.sqlite3"
+    service = CampaignService(CampaignStore(database))
+    planned = service.plan(service.create(_request()).campaign_id, [])
+    hypothesis = planned.hypotheses[0]
+    proposal = hypothesis.proposal
+    assert proposal is not None
+    proposal_sha256 = canonical_sha256(proposal.model_dump(mode="json"))
+    now = datetime.now(timezone.utc)
+    manifest = StageManifest(
+        job_id="stage-sync-0001",
+        program_name=proposal.program_name,
+        stage_type=proposal.stage_type,
+        target_host=proposal.target_host,
+        allowlist=proposal.allowlist,
+        denylist=proposal.denylist,
+        authorization=Authorization(
+            granted=True,
+            scope="stage",
+            user_statement="Authorized safe loopback test stage.",
+            granted_at=now,
+            expires_at=now + timedelta(hours=1),
+        ),
+        dry_run=False,
+        requests=proposal.requests,
+        limits=proposal.limits,
+        created_at=now,
+        expires_at=now + timedelta(hours=1),
+        notes=f"Created from {proposal.proposal_id}; proposal_sha256={proposal_sha256}",
+    )
+    jobs = JobStore(database)
+    manifest_sha256 = canonical_sha256(manifest.model_dump(mode="json"))
+    jobs.upsert_manifest(manifest, manifest_sha256=manifest_sha256)
+    summary = StageSummary(
+        job_id=manifest.job_id,
+        target_host=manifest.target_host,
+        manifest_sha256=manifest_sha256,
+        stage_status=StageStatus.COMPLETED,
+        dry_run=False,
+        started_at=now,
+        ended_at=now,
+        actual_requests=2,
+        results=[
+            RequestResult(index=1, method="HEAD", url="https://demo.invalid/"),
+            RequestResult(index=2, method="GET", url="https://demo.invalid/"),
+        ],
+    )
+    summary_payload = summary.model_dump(mode="json")
+    jobs.set_summary(
+        manifest.job_id,
+        "completed",
+        summary_payload,
+        summary_sha256=canonical_sha256(summary_payload),
+    )
+    analysis = EvidenceAnalysis(
+        job_id=manifest.job_id,
+        target_host=manifest.target_host,
+        generated_at=now,
+        source_summary_sha256=canonical_sha256(summary_payload),
+        evidence_integrity="verified",
+        candidate_count=0,
+        observation_count=1,
+        safety_stop_count=0,
+    )
+    jobs.set_analysis(
+        manifest.job_id,
+        analysis.model_dump(mode="json"),
+    )
+
+    synced = service.sync_jobs(planned.campaign_id, jobs.list_jobs())
+    assert synced.status == CampaignStatus.RESULT_REVIEW
+    assert synced.next_action.kind == NextActionKind.REVIEW_RESULT
+    assert synced.budget.used_stages == 1
+    assert synced.budget.used_requests == 2
+    assert len(synced.execution_links) == 1
+    assert synced.execution_links[0].review_recommendation == "rejected"
+
+    synced_again = service.sync_jobs(planned.campaign_id, jobs.list_jobs())
+    assert synced_again.budget.used_stages == 1
+    assert synced_again.budget.used_requests == 2
+
+    completed = service.record_decision(
+        planned.campaign_id,
+        CampaignDecisionRequest(
+            hypothesis_id=hypothesis.hypothesis_id,
+            disposition="rejected",
+            statement="Human review confirmed that the public baseline is expected behavior.",
+            consumed_requests=0,
+        ),
+    )
+    assert completed.status == CampaignStatus.COMPLETED
+    assert completed.budget.used_requests == 2
+
+
+def test_dry_run_summary_accepts_planned_results_without_counting_requests() -> None:
+    now = datetime.now(timezone.utc)
+    digest = "a" * 64
+    summary = StageSummary(
+        job_id="stage-dryrun-0001",
+        target_host="demo.invalid",
+        manifest_sha256=digest,
+        stage_status=StageStatus.DRY_RUN,
+        dry_run=True,
+        started_at=now,
+        ended_at=now,
+        actual_requests=0,
+        results=[RequestResult(index=1, method="HEAD", url="https://demo.invalid/")],
+    )
+
+    validated = CampaignService._validated_summary(
+        summary.model_dump(mode="json"),
+        job_id=summary.job_id,
+        target_host=summary.target_host,
+        manifest_sha256=digest,
+    )
+
+    assert validated is not None
+    assert validated.actual_requests == 0

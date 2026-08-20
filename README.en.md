@@ -83,6 +83,8 @@ The dashboard intentionally has **no direct target-execution button**.
 | Auto triage | Offline ranking of directory listing, verbose error, source map, header, and CORS leads |
 | Traffic intelligence | Redact HAR/Burp XML before persistence, then compare normalized endpoints, roles, status, and JSON shape |
 | Campaign orchestration | Preserve exact-host research state and rank the next action by risk, confidence, novelty, evidence, and cost |
+| Program snapshots | Preserve exact scope, forbidden actions, rate limits, and report requirements in immutable `ProgramSpec` records; hash but do not persist free-form source text |
+| Research loop | Bind Campaigns, jobs, and evidence through proposal digests and manifest contracts; reconcile request budgets from saved stage summaries |
 | Submission deduplication | Flag likely same-code environments using method, path, status class, response shape, and technical posture |
 | Finding lifecycle | `candidate → needs validation → human confirmed → submitted/fixed`; candidates cannot produce reports |
 | Integrity | Cross-end manifest SHA-256, replay prevention, evidence indexes, and file hashes |
@@ -187,10 +189,13 @@ aegisscope runner-dry-run .\examples\safe-demo\stage.json
 aegisscope analyze-evidence .\var\evidence\<job-id>
 aegisscope traffic-import D:\captures\capture.har --program-name "Authorized Program" --allow-host example.invalid --role guest
 aegisscope traffic-analyze .\var\imports\<import-id>\traffic.json
+aegisscope program-import .\examples\safe-demo\program.json
+aegisscope program-list
 aegisscope campaign-create .\examples\safe-demo\campaign.json
 aegisscope campaign-list
 aegisscope campaign-plan <campaign-id>
 aegisscope campaign-export-proposal <campaign-id> --output proposal.json
+aegisscope campaign-sync <campaign-id>
 aegisscope finding-list
 aegisscope finding-transition <finding-id> --to needs_validation --statement "Human review completed; request minimal validation."
 aegisscope finding-report <finding-id> --language en --output report.md
@@ -202,7 +207,7 @@ If a stage finished but evidence download failed, `recover-evidence <job-id> --e
 re-downloads remote evidence only. It never invokes the runner or replays a target request,
 and writes into a fresh, non-overwriting recovery directory.
 
-The included demo targets `example.invalid` and remains `dry_run: true`.
+The included demo targets the reserved `demo.invalid` host and remains `dry_run: true`.
 
 ### Offline traffic-intelligence workflow
 
@@ -221,9 +226,10 @@ Traffic analysis never replays HTTP requests or copies raw cookies, tokens, requ
 2. Select **Plan next step**. The engine reads matching redacted traffic analysis, deduplicates candidates, and ranks hypotheses.
 3. Public credential-free observations may produce a strict `dry_run` proposal. Authentication, role, and object-authorization leads are routed to manual Burp review.
 4. Download and review the proposal, then use `aegisscope authorize` to record separate stage authorization.
-5. Record the human disposition and actual request count; the campaign selects the next open hypothesis until completion or budget exhaustion.
+5. After a stage finishes, select **Sync stage results** or run `campaign-sync`. Proposal digests and manifest contracts bind the local job, and actual request usage comes from the saved stage summary.
+6. The campaign advances only after a human reviews the conservative suggested disposition.
 
-Campaign creation, planning, and proposal download are local-only and never contact Kali or a target. See [Campaign mode](docs/campaign-mode.md).
+Campaign creation, planning, proposal download, and result synchronization are local-only and never contact Kali or a target. See [Campaign mode](docs/campaign-mode.md) and the [Research loop](docs/research-loop.md).
 
 ## Configuration
 
@@ -253,6 +259,7 @@ aegis-scope/
 │   ├── analysis/              # Offline candidate discovery, ranking, and deduplication
 │   ├── traffic/               # Redacted HAR/Burp import, role diffing, and duplicate clustering
 │   ├── campaigns/             # Hypothesis ranking, cumulative budgets, next action, and audit state
+│   ├── programs/              # Immutable structured program-rule snapshots
 │   ├── findings/              # Human-governed lifecycle and report gate
 │   ├── transport/             # Fixed SSH/SCP transport
 │   ├── providers/             # Proposal-only model adapters
@@ -277,8 +284,11 @@ Interactive documentation is available at `/docs` while the local service is run
 | `POST /api/v1/jobs/{job_id}/analyze` | Analyze downloaded evidence offline; sends no requests |
 | `GET /api/v1/traffic/imports` | Read redacted derived traffic imports |
 | `GET /api/v1/traffic/analyses` | Read offline traffic diffs and duplicate hints |
+| `POST /api/v1/programs` | Create a structured rule snapshot without persisting free-form source text |
+| `GET /api/v1/programs` | Read structured program-rule snapshots |
 | `POST /api/v1/campaigns` | Create a local Campaign without target execution authority |
 | `POST /api/v1/campaigns/{id}/plan` | Rank offline evidence and select one next action |
+| `POST /api/v1/campaigns/{id}/sync-jobs` | Synchronize saved local job summaries into a Campaign without sending a request |
 | `GET /api/v1/campaigns/{id}/proposal` | Download a strict proposal that still needs separate authorization |
 | `GET /api/v1/findings` | Read local candidates and human-reviewed state |
 | `POST /api/v1/findings/{finding_id}/transition` | Record a constrained human lifecycle transition |
@@ -297,7 +307,7 @@ Pull requests are welcome. Read [Contributing](CONTRIBUTING.md), [Code of Conduc
 
 ## Project status
 
-AegisScope `0.4.0` is an alpha, offline-first foundation. It discovers and deduplicates candidates, preserves Campaign state, and proposes minimal validation directions, but tool output remains a lead until a human validates server-side impact.
+AegisScope `0.5.0` is an alpha, authorization-first research loop. It discovers and deduplicates candidates, preserves Campaign state, binds independently authorized jobs, and synchronizes offline evidence, but tool output remains a lead until a human validates server-side impact.
 
 Planned work:
 

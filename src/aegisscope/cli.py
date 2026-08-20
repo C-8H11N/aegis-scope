@@ -33,9 +33,12 @@ from aegisscope.findings.store import AnalystStore
 from aegisscope.i18n import translate
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
+from aegisscope.programs.models import ProgramSpecCreateRequest
+from aegisscope.programs.service import ProgramService, ProgramSpecError
+from aegisscope.programs.store import ProgramStore
 from aegisscope.reporting import ReportLanguage, load_report_template
 from aegisscope.runner.executor import StageExecutor
-from aegisscope.security.integrity import atomic_write_new_text, canonical_sha256
+from aegisscope.security.integrity import atomic_write_new_text, canonical_sha256, sha256_file
 from aegisscope.transport.ssh import OpenSshTransport
 from aegisscope.traffic.analyzer import TrafficAnalysisError, TrafficAnalyzer
 from aegisscope.traffic.importer import TrafficImportError, TrafficImporter
@@ -72,6 +75,11 @@ def _analyst_store(settings: Settings) -> AnalystStore:
 def _campaign_store(settings: Settings) -> CampaignStore:
     settings.ensure_local_directories()
     return CampaignStore(settings.data_dir / "db" / "aegisscope.sqlite3")
+
+
+def _program_store(settings: Settings) -> ProgramStore:
+    settings.ensure_local_directories()
+    return ProgramStore(settings.data_dir / "db" / "aegisscope.sqlite3")
 
 
 @app.command("version")
@@ -329,7 +337,9 @@ def campaign_create(
     settings = Settings.from_env()
     try:
         request = CampaignCreateRequest.model_validate(_load_object(specification))
-        campaign = CampaignService(_campaign_store(settings)).create(request)
+        campaign = CampaignService(
+            _campaign_store(settings), _program_store(settings)
+        ).create(request)
         if output:
             _write_model(output, campaign)
     except (ValueError, FileExistsError) as exc:
@@ -369,7 +379,9 @@ def campaign_plan(
             if payload.get("program_name") == campaign.program_name
         ][:20]
     try:
-        planned = CampaignService(campaign_store).plan(campaign_id, analyses)
+        planned = CampaignService(campaign_store, _program_store(settings)).plan(
+            campaign_id, analyses
+        )
         if output:
             _write_model(output, planned)
     except (CampaignServiceError, ValueError) as exc:
@@ -446,13 +458,73 @@ def campaign_decision(
             statement=statement,
             consumed_requests=consumed_requests,
         )
-        campaign = CampaignService(_campaign_store(settings)).record_decision(
-            campaign_id, request
-        )
+        campaign = CampaignService(
+            _campaign_store(settings), _program_store(settings)
+        ).record_decision(campaign_id, request)
     except (CampaignServiceError, KeyError, ValueError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from exc
     console.print(f"[green]{campaign.status.value}: {campaign.next_action.kind.value}[/green]")
+
+
+@app.command("campaign-sync")
+def campaign_sync(campaign_id: str) -> None:
+    """Synchronize local job/evidence metadata into a campaign / 回流本地阶段结果。"""
+
+    settings = Settings.from_env()
+    orchestrator = Orchestrator(settings)
+    try:
+        campaign = CampaignService(
+            _campaign_store(settings), _program_store(settings)
+        ).sync_jobs(campaign_id, orchestrator.store.list_jobs(500))
+    except (CampaignServiceError, KeyError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]{campaign.status.value}: {campaign.next_action.kind.value}; "
+        f"linked jobs={len(campaign.execution_links)}[/green]"
+    )
+    console.print("Offline sync only; no target request was sent / 仅离线同步，未发送目标请求")
+
+
+@app.command("program-import")
+def program_import(
+    specification: Path = typer.Argument(..., help="ProgramSpecCreateRequest JSON file"),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Import a structured immutable program-rule snapshot / 导入结构化规则快照。"""
+
+    settings = Settings.from_env()
+    try:
+        request = ProgramSpecCreateRequest.model_validate(_load_object(specification))
+        spec = ProgramService(_program_store(settings)).create(request)
+        if output:
+            _write_model(output, spec)
+    except (ProgramSpecError, ValueError, FileExistsError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Program spec / 项目规则快照: {spec.spec_id}[/green]")
+    console.print(f"Source SHA-256: {spec.source_sha256}")
+    console.print("Free-form source text was not persisted / 原始规则正文未写入数据库")
+
+
+@app.command("program-list")
+def program_list(limit: int = typer.Option(100, min=1, max=500)) -> None:
+    """List structured program-rule snapshots / 列出规则快照。"""
+
+    settings = Settings.from_env()
+    table = Table(title="Program specs / 项目规则快照")
+    for heading in ("ID", "Program", "Version", "Hosts", "Automation"):
+        table.add_column(heading)
+    for spec in _program_store(settings).list(limit):
+        table.add_row(
+            spec.spec_id,
+            spec.program_name,
+            spec.rule_version,
+            str(len(spec.exact_hosts)),
+            str(spec.automation_allowed).lower(),
+        )
+    console.print(table)
 
 
 @app.command("finding-list")
@@ -599,7 +671,12 @@ def dispatch(
     if summary_path.is_file():
         summary_payload = _load_object(summary_path)
         status = str(summary_payload.get("stage_status", "failed"))
-        orchestrator.store.set_summary(prepared.job_id, status, summary_payload)
+        orchestrator.store.set_summary(
+            prepared.job_id,
+            status,
+            summary_payload,
+            summary_sha256=sha256_file(summary_path),
+        )
     else:
         execute_step = next((step for step in result.steps if step.name == "execute"), None)
         download_step = next((step for step in result.steps if step.name == "download"), None)

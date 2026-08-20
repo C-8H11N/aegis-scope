@@ -1,11 +1,12 @@
 {
-  "program_name": "AegisScope Offline Demo",
-  "target_host": "example.invalid",
+  "program_name": "Safe Demo",
+  "target_host": "demo.invalid",
   "allowlist": [
-    "example.invalid"
+    "demo.invalid"
   ],
   "denylist": [],
   "objective": "Prioritize local redacted evidence and prepare the safest useful next step.",
   "max_stages": 3,
-  "max_total_requests": 20
+  "max_total_requests": 20,
+  "program_spec_id": "program-0b59c6a5f9b863c1"
 }

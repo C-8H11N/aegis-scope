@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.4.0 - Unreleased
+## 0.5.0 - Unreleased
+
+- Added immutable structured `ProgramSpec` snapshots with source hashes, exact-host scope, program limits, and non-persistence of free-form rule text.
+- Added Campaign-to-job execution links that verify proposal identity, proposal digest, manifest contents, and local job audit metadata before binding.
+- Added offline job-result synchronization that derives actual request usage from stage summaries, prevents double counting, and routes analyzer output to human result review.
+- Added a bilingual dashboard action and CLI command for synchronizing local stage results without invoking SSH or sending target traffic.
+- Added a result-review state and evidence-grounded suggested disposition while preserving the human-only vulnerability confirmation boundary.
+
+## 0.4.0 - 2026-08-09
 
 - Added offline Autonomous Campaign Mode with exact-host state, cumulative stage/request budgets, and an append-only audit trail.
 - Added deterministic hypothesis ranking across risk, confidence, novelty, evidence quality, and request cost.

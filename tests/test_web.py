@@ -139,6 +139,9 @@ def test_campaign_api_plans_locally_without_network_authority(tmp_path: Path) ->
     proposal = client.get(f"/api/v1/campaigns/{campaign_id}/proposal")
     assert proposal.status_code == 200
     assert proposal.json()["dry_run"] is True
+    synced = client.post(f"/api/v1/campaigns/{campaign_id}/sync-jobs")
+    assert synced.status_code == 200
+    assert synced.json()["execution_links"] == []
     hypothesis_id = body["next_action"]["hypothesis_id"]
     decision = client.post(
         f"/api/v1/campaigns/{campaign_id}/decisions",
@@ -155,3 +158,59 @@ def test_campaign_api_plans_locally_without_network_authority(tmp_path: Path) ->
     listing = client.get("/api/v1/campaigns")
     assert listing.status_code == 200
     assert len(listing.json()) == 1
+
+
+def test_program_spec_api_persists_only_structured_snapshot(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path,
+        ssh_alias="kali-src",
+        remote_root="~/src-runner",
+        llm_base_url=None,
+        llm_api_key=None,
+        llm_model=None,
+        language="zh-CN",
+    )
+    client = TestClient(create_app(settings))
+    source_text = "Authorized safe demo rules for an exact reserved host only."
+    created = client.post(
+        "/api/v1/programs",
+        json={
+            "program_name": "Safe Demo",
+            "rule_version": "2026.1",
+            "exact_hosts": ["demo.invalid"],
+            "denied_hosts": [],
+            "forbidden_actions": ["credential attacks"],
+            "evidence_requirements": ["Preserve evidence hashes"],
+            "report_requirements": ["State verified impact only"],
+            "authentication_policy": "public_only",
+            "automation_allowed": True,
+            "api_testing_allowed": False,
+            "min_request_interval_seconds": 7,
+            "max_requests_per_stage": 4,
+            "max_concurrency": 1,
+            "testing_window": "Explicitly authorized stages only",
+            "source_reference": "safe local rules",
+            "source_text": source_text,
+        },
+    )
+    assert created.status_code == 200
+    spec = created.json()
+    assert "source_text" not in spec
+    assert spec["source_sha256"]
+
+    campaign = client.post(
+        "/api/v1/campaigns",
+        json={
+            "program_name": "Safe Demo",
+            "target_host": "demo.invalid",
+            "allowlist": ["demo.invalid"],
+            "denylist": [],
+            "objective": "Use the structured local rule snapshot for safe planning.",
+            "max_stages": 2,
+            "max_total_requests": 10,
+            "program_spec_id": spec["spec_id"],
+        },
+    )
+    assert campaign.status_code == 200
+    assert campaign.json()["program_spec_sha256"]
+    assert source_text.encode("utf-8") not in (tmp_path / "db" / "aegisscope.sqlite3").read_bytes()

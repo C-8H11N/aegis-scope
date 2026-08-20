@@ -201,6 +201,13 @@
 
           <div class="campaign-layout">
             <form class="campaign-form" id="campaign-form">
+              <label class="form-field">
+                <span data-i18n="programSnapshot">项目规则快照</span>
+                <select id="campaign-program-spec" name="programSpec" aria-describedby="program-spec-help">
+                  <option value="" data-i18n="unboundProgramSnapshot">不绑定（兼容模式）</option>
+                </select>
+                <small id="program-spec-help" data-i18n="programSnapshotHelp">绑定后会固定精确范围、速率和请求上限；原始规则正文不会保存在数据库中。</small>
+              </label>
               <div class="field-grid">
                 <label class="form-field">
                   <span data-i18n="programName">SRC 项目名称</span>
@@ -245,6 +252,13 @@
                 <div class="campaign-score-row">
                   <span><b id="campaign-hypothesis-count">0</b> <span data-i18n="hypotheses">个假设</span></span>
                   <span><b id="campaign-budget-used">0 / 0</b> <span data-i18n="requestsUsed">次请求</span></span>
+                  <span><b id="campaign-execution-count">0</b> <span data-i18n="linkedExecutions">个已关联阶段</span></span>
+                </div>
+                <div class="campaign-execution-summary is-hidden" id="campaign-execution-summary">
+                  <span data-i18n="latestStage">最近关联阶段</span>
+                  <code id="campaign-execution-job">—</code>
+                  <strong id="campaign-execution-status">—</strong>
+                  <p id="campaign-execution-detail"></p>
                 </div>
                 <button class="button button--secondary is-hidden" id="download-proposal" type="button" data-i18n="downloadProposal">下载待授权提案</button>
                 <details class="campaign-feedback is-hidden" id="campaign-feedback">

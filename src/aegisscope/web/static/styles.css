@@ -821,6 +821,7 @@ main {
 }
 
 .form-field input,
+.form-field select,
 .form-field textarea {
   width: 100%;
   min-height: 44px;
@@ -845,6 +846,7 @@ main {
 }
 
 .form-field input:focus,
+.form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
@@ -907,6 +909,42 @@ main {
   color: var(--text);
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 12px;
+}
+
+.campaign-execution-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px 10px;
+  margin-top: 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 11px 12px;
+  font-size: 9px;
+}
+
+.campaign-execution-summary > span,
+.campaign-execution-summary > p {
+  color: var(--text-subtle);
+}
+
+.campaign-execution-summary > code {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-execution-summary > strong {
+  color: var(--primary);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.campaign-execution-summary > p {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .campaign-next-result > .button {
@@ -1021,7 +1059,8 @@ main {
 }
 
 .campaign-status-awaiting_stage_authorization,
-.campaign-status-manual_review {
+.campaign-status-manual_review,
+.campaign-status-result_review {
   border-color: color-mix(in srgb, var(--warning) 35%, transparent);
   background: color-mix(in srgb, var(--warning) 8%, transparent);
   color: var(--warning);
@@ -1048,7 +1087,15 @@ main {
   white-space: nowrap;
 }
 
-.campaign-plan-button {
+.campaign-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.campaign-plan-button,
+.campaign-sync-button {
   min-width: 112px;
 }
 

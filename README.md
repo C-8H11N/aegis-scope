@@ -83,6 +83,8 @@ Windows 控制平面负责编排与审计；Kali Runner 在允许执行前，会
 | 自动研判 | 离线识别目录列表、错误栈泄露、Source Map、安全头与 CORS 等候选并排序 |
 | 流量智能 | 对 HAR/Burp XML 先脱敏再落盘，按角色比较归一化接口、状态和 JSON 结构 |
 | Campaign 编排 | 保存精确主机研究状态，按风险、置信度、新颖度、证据和成本排序下一动作 |
+| 项目规则快照 | 将精确范围、禁止动作、速率和报告要求保存为不可变 `ProgramSpec`；原始规则正文只计算哈希、不落库 |
+| 研究闭环 | 用提案摘要与清单内容绑定 Campaign、Job 和证据，从阶段摘要自动核对请求预算并进入人工结果复核 |
 | 提交去重 | 根据方法、路径、状态类别、响应结构与技术特征标记疑似同代码不同环境 |
 | 漏洞生命周期 | `候选 → 待验证 → 人工确认 → 已提交/已修复`，候选默认不可生成报告 |
 | 完整性 | 清单 SHA-256 双端校验、任务防重放、证据索引和文件哈希 |
@@ -187,10 +189,13 @@ aegisscope runner-dry-run .\examples\safe-demo\stage.json
 aegisscope analyze-evidence .\var\evidence\<job-id>
 aegisscope traffic-import D:\captures\capture.har --program-name "授权项目" --allow-host example.invalid --role guest
 aegisscope traffic-analyze .\var\imports\<import-id>\traffic.json
+aegisscope program-import .\examples\safe-demo\program.json
+aegisscope program-list
 aegisscope campaign-create .\examples\safe-demo\campaign.json
 aegisscope campaign-list
 aegisscope campaign-plan <campaign-id>
 aegisscope campaign-export-proposal <campaign-id> --output proposal.json
+aegisscope campaign-sync <campaign-id>
 aegisscope finding-list
 aegisscope finding-transition <finding-id> --to needs_validation --statement "已人工复核，申请最小化验证阶段。"
 aegisscope finding-report <finding-id> --language zh-CN --output report.md
@@ -201,7 +206,7 @@ aegisscope report-template --language zh-CN --output report.md
 如果阶段已经执行但证据下载失败，使用 `recover-evidence <job-id> --execute` 只重新下载
 远程证据；它不会重新调用 Runner，也不会重放任何目标请求。恢复结果写入新的不可覆盖目录。
 
-内置演示使用 `example.invalid`，并永久保持 `dry_run: true`。
+内置演示使用保留域名 `demo.invalid`，并永久保持 `dry_run: true`。
 
 ### 离线流量智能工作流
 
@@ -220,10 +225,11 @@ aegisscope report-template --language zh-CN --output report.md
 2. 点击“规划下一步”，系统自动读取同项目的脱敏流量分析，完成候选去重与优先级排序；
 3. 公开、无认证的低影响方向会生成严格的 `dry_run` 阶段提案；认证、角色和对象权限方向会转交人工 Burp 复核；
 4. 下载提案并人工审核后，仍需使用 `aegisscope authorize` 单独记录阶段授权；
-5. 将人工结论和实际请求数写回 Campaign 后，系统继续选择下一个未完成假设，直到完成或预算耗尽。
+5. 阶段完成后点击“同步阶段结果”或运行 `campaign-sync`；系统通过提案摘要和清单内容绑定本地 Job，从阶段摘要自动读取实际请求数；
+6. 人工复核系统给出的保守建议结论后，Campaign 才会继续选择下一个未完成假设。
 
-Campaign 创建、规划和提案下载都是纯本地操作，不会连接 Kali 或访问目标。完整说明见
-[Campaign 模式文档](docs/campaign-mode.md)。
+Campaign 创建、规划、提案下载和结果同步都是纯本地操作，不会连接 Kali 或访问目标。完整说明见
+[Campaign 模式文档](docs/campaign-mode.md)与[研究闭环文档](docs/research-loop.md)。
 
 ## 配置
 
@@ -253,6 +259,7 @@ aegis-scope/
 │   ├── analysis/              # 离线漏洞候选发现、评分与去重
 │   ├── traffic/               # HAR/Burp XML 脱敏导入、角色差异和重复聚类
 │   ├── campaigns/             # 假设排序、累计预算、下一动作与审计状态
+│   ├── programs/              # 不可变结构化项目规则快照
 │   ├── findings/              # 人工治理的漏洞生命周期与报告门槛
 │   ├── transport/             # 固定 SSH/SCP 传输
 │   ├── providers/             # 仅提案模型适配器
@@ -277,8 +284,11 @@ aegis-scope/
 | `POST /api/v1/jobs/{job_id}/analyze` | 离线分析已下载证据，不发送请求 |
 | `GET /api/v1/traffic/imports` | 读取脱敏派生流量导入记录 |
 | `GET /api/v1/traffic/analyses` | 读取离线流量差异与去重结果 |
+| `POST /api/v1/programs` | 创建不保存原始规则正文的结构化规则快照 |
+| `GET /api/v1/programs` | 读取项目规则快照 |
 | `POST /api/v1/campaigns` | 创建不含目标执行权限的本地 Campaign |
 | `POST /api/v1/campaigns/{id}/plan` | 离线排序证据并选择一个下一动作 |
+| `POST /api/v1/campaigns/{id}/sync-jobs` | 将本地阶段摘要和离线分析安全回流到 Campaign，不发送请求 |
 | `GET /api/v1/campaigns/{id}/proposal` | 下载待独立授权的严格阶段提案 |
 | `GET /api/v1/findings` | 读取本地漏洞候选及人工状态 |
 | `POST /api/v1/findings/{finding_id}/transition` | 记录受约束的人工状态变更 |
@@ -297,7 +307,7 @@ pytest --cov=aegisscope
 
 ## 项目状态
 
-AegisScope 当前为 `0.4.0` Alpha、离线优先版本。它会自动发现漏洞候选、去重、维护 Campaign 状态并建议最小验证方向，但工具输出仍是线索；只有人工完成服务端影响验证后才能形成漏洞结论。
+AegisScope 当前为 `0.5.0` Alpha、授权优先研究闭环版本。它会自动发现漏洞候选、去重、维护 Campaign 状态、绑定已授权任务并回流离线证据，但工具输出仍是线索；只有人工完成服务端影响验证后才能形成漏洞结论。
 
 后续计划：
 

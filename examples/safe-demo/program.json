@@ -1,0 +1,23 @@
+{
+  "program_name": "Safe Demo",
+  "rule_version": "2026.1",
+  "exact_hosts": ["demo.invalid"],
+  "denied_hosts": ["blocked.invalid"],
+  "allowed_stage_types": ["basic_observation", "public_parameter_baseline"],
+  "forbidden_actions": [
+    "credential attacks",
+    "denial of service",
+    "scope expansion"
+  ],
+  "evidence_requirements": ["Preserve timestamps and evidence hashes"],
+  "report_requirements": ["Describe verified impact without exaggeration"],
+  "authentication_policy": "public_only",
+  "automation_allowed": true,
+  "api_testing_allowed": false,
+  "min_request_interval_seconds": 5,
+  "max_requests_per_stage": 20,
+  "max_concurrency": 1,
+  "testing_window": "Explicitly authorized stages only",
+  "source_reference": "Repository safe-demo rules",
+  "source_text": "Permanent local demonstration rules for reserved invalid hosts. No real target access is authorized."
+}

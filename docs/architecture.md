@@ -29,6 +29,13 @@ It may create a strict `StageProposal`, but it has no transport reference and ca
 authorization record. Authentication-dependent hypotheses are deliberately routed to manual
 Burp review instead of being replayed by the credential-free runner.
 
+Version 0.5 adds an immutable `ProgramSpec` snapshot in front of the campaign and a local-only
+result binding behind it. A campaign records the rule snapshot digest. A prepared job is linked
+only when its proposal identity, proposal digest, manifest, exact host, request list, and limits
+all match. Saved `StageSummary` and `EvidenceAnalysis` records feed actual request usage and a
+conservative review recommendation back into the hypothesis queue. This synchronization layer
+has no transport dependency and cannot dispatch a job.
+
 ## 中文
 
 AegisScope 在一个仓库中划分三个信任域：
@@ -51,3 +58,8 @@ AegisScope 在一个仓库中划分三个信任域：
 Campaign 层位于分析员链路之上：它为单个精确主机保存有界假设队列，对候选指纹去重并
 选择一个最有价值的下一动作。它可以生成严格 `StageProposal`，但不持有传输能力，也不能
 创建授权记录。依赖认证的假设会明确转交人工 Burp 复核，不会由无凭据 Runner 自动重放。
+
+0.5 在 Campaign 前增加不可变 `ProgramSpec` 规则快照，在其后增加仅本地运行的结果绑定层。
+Campaign 保存规则快照摘要；只有提案身份、提案摘要、清单、精确主机、请求列表和限制全部
+一致时，Job 才能绑定。已保存的 `StageSummary` 与 `EvidenceAnalysis` 会把实际请求用量和保守
+复核建议回流到假设队列。同步层不依赖传输组件，也不能派发任务。

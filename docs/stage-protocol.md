@@ -11,8 +11,8 @@ cookie, token, credential, proxy, concurrency, redirect, scanner, or exploit fie
 ## Authorization / 授权
 
 An authorization record contains the user's exact statement, stage scope, grant time, and
-expiry. The manifest cannot outlive the authorization. In the MVP this is an auditable record,
-not cryptographic proof; signed manifests are planned for 0.2.
+expiry. The manifest cannot outlive the authorization. This is an auditable record, not
+cryptographic proof. Public-key signatures remain a future hardening item.
 
 授权记录包含用户授权原文、阶段范围、授权时间和过期时间。清单不得晚于授权过期时间。
 当前版本会为规范化清单生成 SHA-256，并在 Kali 执行前再次校验，用于发现传输错误或

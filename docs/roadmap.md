@@ -32,6 +32,15 @@
 - Completed: bilingual Campaign CLI, API, and dashboard / 已完成双语 Campaign CLI、API 与控制台；
 - Next: signed authorization bundles and loopback end-to-end campaign simulation / 下一步为签名授权包与本地回环端到端模拟。
 
+## 0.5 - Research Loop / 研究闭环
+
+- Completed: immutable structured program-rule snapshots and source digests / 已完成不可变结构化项目规则快照与来源摘要；
+- Completed: proposal-to-job-to-evidence binding with digest and contract matching / 已完成提案、任务与证据的摘要及协议绑定；
+- Completed: automatic offline result synchronization and actual-budget reconciliation / 已完成离线结果自动回流与真实请求预算核对；
+- Completed: bilingual dashboard result synchronization and human result-review state / 已完成双语控制台结果同步与人工结果复核状态；
+- Next: Ed25519 signed authorization bundles and tamper-evident audit chains / 下一步：Ed25519 签名授权包与防篡改审计哈希链；
+- Next: richer object-level authorization and business-flow graph / 下一步：更丰富的对象级权限与业务流程图。
+
 ## 1.0 - Stable authorization platform / 稳定授权平台
 
 - Versioned protocol compatibility / 版本化协议兼容；

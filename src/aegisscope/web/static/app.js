@@ -41,6 +41,10 @@ const translations = {
     offlinePlanner: "离线决策引擎",
     campaignBoundaryTitle: "自动化边界",
     campaignBoundaryText: "“规划下一步”仅处理本地数据。任何生成的阶段提案仍需人工审核、摘要确认和独立授权。",
+    programSnapshot: "项目规则快照",
+    unboundProgramSnapshot: "不绑定（兼容模式）",
+    programSnapshotHelp: "绑定后会固定精确范围、速率和请求上限；原始规则正文不会保存在数据库中。",
+    programHostUnit: "个主机",
     programName: "SRC 项目名称",
     exactHost: "精确主机",
     exactHostHelp: "只会加入这个精确主机，不推导子域名。",
@@ -53,6 +57,11 @@ const translations = {
     campaignEmptyText: "创建后点击“规划下一步”，系统会优先使用同项目的离线流量分析；没有证据时只生成两请求公开基线提案。",
     hypotheses: "个假设",
     requestsUsed: "次请求",
+    linkedExecutions: "个已关联阶段",
+    syncResults: "同步阶段结果",
+    campaignSynced: "已从本地审计库同步阶段结果；没有发送目标请求。",
+    latestStage: "最近关联阶段",
+    stageResultSummary: "实际请求 {requests} · 候选 {candidates} · 观察 {observations}",
     downloadProposal: "下载待授权提案",
     recordOutcome: "完成复核后记录结果",
     reviewStatement: "人工复核说明",
@@ -73,6 +82,7 @@ const translations = {
     planningCampaignStatus: "规划中",
     awaitingAuthorizationStatus: "待阶段授权",
     manualReviewCampaignStatus: "需人工复核",
+    resultReviewCampaignStatus: "待结果复核",
     completedCampaignStatus: "已完成",
     budgetExhaustedStatus: "预算已耗尽",
     stoppedCampaignStatus: "已安全停止",
@@ -199,6 +209,10 @@ const translations = {
     offlinePlanner: "Offline decision engine",
     campaignBoundaryTitle: "Automation boundary",
     campaignBoundaryText: "Plan next step processes local data only. Every generated stage proposal still requires human review, digest confirmation, and separate authorization.",
+    programSnapshot: "Program rule snapshot",
+    unboundProgramSnapshot: "Unbound (compatibility mode)",
+    programSnapshotHelp: "Binding freezes exact scope, rate, and request limits. Free-form rule text is not stored in the database.",
+    programHostUnit: "host(s)",
     programName: "SRC program name",
     exactHost: "Exact host",
     exactHostHelp: "Only this exact host is included; subdomains are never inferred.",
@@ -211,6 +225,11 @@ const translations = {
     campaignEmptyText: "Then select Plan next step. Matching offline traffic analysis is preferred; without evidence, only a two-request public baseline proposal is created.",
     hypotheses: "hypotheses",
     requestsUsed: "requests",
+    linkedExecutions: "linked stages",
+    syncResults: "Sync stage results",
+    campaignSynced: "Stage results were synchronized from the local audit store. No target request was sent.",
+    latestStage: "Latest linked stage",
+    stageResultSummary: "Actual requests {requests} · candidates {candidates} · observations {observations}",
     downloadProposal: "Download unapproved proposal",
     recordOutcome: "Record the outcome after review",
     reviewStatement: "Human review statement",
@@ -231,6 +250,7 @@ const translations = {
     planningCampaignStatus: "Planning",
     awaitingAuthorizationStatus: "Needs stage authorization",
     manualReviewCampaignStatus: "Needs human review",
+    resultReviewCampaignStatus: "Needs result review",
     completedCampaignStatus: "Completed",
     budgetExhaustedStatus: "Budget exhausted",
     stoppedCampaignStatus: "Safely stopped",
@@ -354,6 +374,7 @@ const elements = {
   findingCount: document.querySelector("#finding-count"),
   campaignCount: document.querySelector("#campaign-count"),
   campaignForm: document.querySelector("#campaign-form"),
+  campaignProgramSpec: document.querySelector("#campaign-program-spec"),
   campaignProgram: document.querySelector("#campaign-program"),
   campaignTarget: document.querySelector("#campaign-target"),
   campaignObjective: document.querySelector("#campaign-objective"),
@@ -367,6 +388,11 @@ const elements = {
   campaignNextExplanation: document.querySelector("#campaign-next-explanation"),
   campaignHypothesisCount: document.querySelector("#campaign-hypothesis-count"),
   campaignBudgetUsed: document.querySelector("#campaign-budget-used"),
+  campaignExecutionCount: document.querySelector("#campaign-execution-count"),
+  campaignExecutionSummary: document.querySelector("#campaign-execution-summary"),
+  campaignExecutionJob: document.querySelector("#campaign-execution-job"),
+  campaignExecutionStatus: document.querySelector("#campaign-execution-status"),
+  campaignExecutionDetail: document.querySelector("#campaign-execution-detail"),
   downloadProposal: document.querySelector("#download-proposal"),
   campaignFeedback: document.querySelector("#campaign-feedback"),
   campaignDecisionStatement: document.querySelector("#campaign-decision-statement"),
@@ -765,6 +791,7 @@ function campaignStatusName(status) {
     planning: "planningCampaignStatus",
     awaiting_stage_authorization: "awaitingAuthorizationStatus",
     manual_review: "manualReviewCampaignStatus",
+    result_review: "resultReviewCampaignStatus",
     completed: "completedCampaignStatus",
     budget_exhausted: "budgetExhaustedStatus",
     stopped: "stoppedCampaignStatus"
@@ -799,11 +826,30 @@ function renderCampaignNext(campaign) {
   );
   const budget = campaign && typeof campaign.budget === "object" ? campaign.budget : {};
   elements.campaignBudgetUsed.textContent = `${Number(budget.used_requests || 0)} / ${Number(budget.max_total_requests || 0)}`;
+  elements.campaignExecutionCount.textContent = String(
+    Array.isArray(campaign.execution_links) ? campaign.execution_links.length : 0
+  );
+  const links = Array.isArray(campaign.execution_links) ? campaign.execution_links : [];
+  const latestLink = links.length ? links[links.length - 1] : null;
+  elements.campaignExecutionSummary.classList.toggle("is-hidden", !latestLink);
+  if (latestLink) {
+    elements.campaignExecutionJob.textContent = String(latestLink.job_id || "—");
+    elements.campaignExecutionStatus.textContent = String(latestLink.status || "—").replaceAll("_", " ");
+    elements.campaignExecutionDetail.textContent = t("stageResultSummary")
+      .replace("{requests}", String(Number(latestLink.actual_requests || 0)))
+      .replace("{candidates}", String(Number(latestLink.candidate_count || 0)))
+      .replace("{observations}", String(Number(latestLink.observation_count || 0)));
+  }
   const downloadable = next.kind === "authorize_stage" && Boolean(next.proposal_id);
   elements.downloadProposal.classList.toggle("is-hidden", !downloadable);
   elements.downloadProposal.disabled = !downloadable;
-  const reviewable = ["authorize_stage", "manual_review"].includes(next.kind);
+  const reviewable = ["authorize_stage", "manual_review", "review_result"].includes(next.kind);
   elements.campaignFeedback.classList.toggle("is-hidden", !reviewable);
+  const usageDerived = next.kind === "review_result";
+  elements.campaignConsumedRequests.disabled = usageDerived;
+  if (usageDerived) {
+    elements.campaignConsumedRequests.value = "0";
+  }
 }
 
 function renderCampaigns(campaigns) {
@@ -844,7 +890,12 @@ function renderCampaigns(campaigns) {
     plan.className = "button button--secondary campaign-plan-button";
     plan.dataset.campaignId = String(campaign.campaign_id || "");
     plan.textContent = t("planNext");
-    actions.appendChild(plan);
+    const sync = document.createElement("button");
+    sync.type = "button";
+    sync.className = "button button--secondary campaign-sync-button";
+    sync.dataset.campaignId = String(campaign.campaign_id || "");
+    sync.textContent = t("syncResults");
+    actions.append(plan, sync);
 
     card.append(identity, status, budget, next, actions);
     elements.campaignList.appendChild(card);
@@ -857,6 +908,37 @@ async function loadCampaigns(showErrors = false) {
     renderCampaigns(campaigns);
   } catch (_error) {
     elements.campaignCount.textContent = "—";
+    if (showErrors) {
+      showToast(t("requestFailed"));
+    }
+  }
+}
+
+async function loadProgramSpecs(showErrors = false) {
+  try {
+    const specs = await apiRequest("/api/v1/programs?limit=100");
+    const selected = elements.campaignProgramSpec.value;
+    elements.campaignProgramSpec.replaceChildren();
+    const unbound = document.createElement("option");
+    unbound.value = "";
+    unbound.textContent = t("unboundProgramSnapshot");
+    elements.campaignProgramSpec.appendChild(unbound);
+    (Array.isArray(specs) ? specs : []).forEach((spec) => {
+      const option = document.createElement("option");
+      option.value = String(spec.spec_id || "");
+      option.dataset.programName = String(spec.program_name || "");
+      option.dataset.targetHost = String(
+        Array.isArray(spec.exact_hosts) && spec.exact_hosts.length === 1
+          ? spec.exact_hosts[0]
+          : ""
+      );
+      option.disabled = spec.automation_allowed !== true;
+      option.textContent = `${String(spec.program_name || "—")} · ${String(spec.rule_version || "—")} · ${String(spec.exact_hosts?.length || 0)} ${t("programHostUnit")}`;
+      elements.campaignProgramSpec.appendChild(option);
+    });
+    elements.campaignProgramSpec.value = [...elements.campaignProgramSpec.options]
+      .some((option) => option.value === selected) ? selected : "";
+  } catch (_error) {
     if (showErrors) {
       showToast(t("requestFailed"));
     }
@@ -878,6 +960,9 @@ async function createCampaign(event) {
     max_stages: Number(elements.campaignMaxStages.value),
     max_total_requests: Number(elements.campaignMaxRequests.value)
   };
+  if (elements.campaignProgramSpec.value) {
+    payload.program_spec_id = elements.campaignProgramSpec.value;
+  }
   setBusy(elements.createCampaign, true);
   try {
     const campaign = await apiRequest("/api/v1/campaigns", {
@@ -907,6 +992,27 @@ async function planCampaign(campaignId, button = null) {
     renderCampaignNext(campaign);
     showToast(t("campaignPlanned"));
     await loadCampaigns();
+  } catch (error) {
+    showToast(`${t("requestFailed")}: ${error.message}`);
+  } finally {
+    if (button) {
+      setBusy(button, false);
+    }
+  }
+}
+
+async function syncCampaign(campaignId, button = null) {
+  if (button) {
+    setBusy(button, true);
+  }
+  try {
+    const campaign = await apiRequest(
+      `/api/v1/campaigns/${encodeURIComponent(campaignId)}/sync-jobs`,
+      { method: "POST" }
+    );
+    renderCampaignNext(campaign);
+    showToast(t("campaignSynced"));
+    await Promise.all([loadCampaigns(), loadJobs()]);
   } catch (error) {
     showToast(`${t("requestFailed")}: ${error.message}`);
   } finally {
@@ -1032,7 +1138,7 @@ elements.languageToggle.addEventListener("click", async () => {
   state.language = state.language === "zh-CN" ? "en" : "zh-CN";
   localStorage.setItem("aegisscope-language", state.language);
   applyLanguage();
-  await Promise.all([loadSystemStatus(), loadJobs(), loadFindings(), loadCampaigns()]);
+  await Promise.all([loadSystemStatus(), loadJobs(), loadFindings(), loadCampaigns(), loadProgramSpecs()]);
 });
 
 elements.manifestInput.addEventListener("input", invalidateManifest);
@@ -1069,17 +1175,38 @@ elements.prepareJob.addEventListener("click", prepareCurrentJob);
 elements.refreshJobs.addEventListener("click", () => loadJobs(true));
 elements.refreshFindings.addEventListener("click", () => loadFindings(true));
 elements.campaignForm.addEventListener("submit", createCampaign);
+elements.campaignProgramSpec.addEventListener("change", () => {
+  const selected = elements.campaignProgramSpec.selectedOptions[0];
+  if (!selected || !selected.value) {
+    elements.campaignProgram.readOnly = false;
+    elements.campaignTarget.readOnly = false;
+    return;
+  }
+  elements.campaignProgram.value = selected.dataset.programName || "";
+  elements.campaignProgram.readOnly = true;
+  const target = selected.dataset.targetHost || "";
+  if (target) {
+    elements.campaignTarget.value = target;
+    elements.campaignTarget.readOnly = true;
+  } else {
+    elements.campaignTarget.readOnly = false;
+  }
+});
 elements.refreshCampaigns.addEventListener("click", () => loadCampaigns(true));
 elements.downloadProposal.addEventListener("click", downloadCampaignProposal);
 document.querySelectorAll(".campaign-decision-button").forEach((button) => {
   button.addEventListener("click", () => recordCampaignDecision(button));
 });
 elements.campaignList.addEventListener("click", (event) => {
-  const button = event.target.closest(".campaign-plan-button");
+  const button = event.target.closest(".campaign-plan-button, .campaign-sync-button");
   if (!button || !button.dataset.campaignId) {
     return;
   }
-  planCampaign(button.dataset.campaignId, button);
+  if (button.classList.contains("campaign-sync-button")) {
+    syncCampaign(button.dataset.campaignId, button);
+  } else {
+    planCampaign(button.dataset.campaignId, button);
+  }
 });
 
 applyTheme();
@@ -1088,4 +1215,5 @@ installNavigationObserver();
 loadSystemStatus();
 loadJobs();
 loadFindings();
+loadProgramSpecs();
 loadCampaigns();

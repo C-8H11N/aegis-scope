@@ -28,6 +28,9 @@ from aegisscope.findings.store import AnalystStore
 from aegisscope.i18n import MESSAGES
 from aegisscope.orchestrator import Orchestrator, PreparationError
 from aegisscope.providers.openai_compatible import OpenAICompatiblePlanner, PlannerResponseError
+from aegisscope.programs.models import ProgramSpecCreateRequest
+from aegisscope.programs.service import ProgramService, ProgramSpecError
+from aegisscope.programs.store import ProgramStore
 from aegisscope.traffic.models import TrafficAnalysis
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -39,7 +42,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     analyst_store = AnalystStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
     finding_service = FindingService(analyst_store)
     campaign_store = CampaignStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
-    campaign_service = CampaignService(campaign_store)
+    program_store = ProgramStore(runtime.data_dir / "db" / "aegisscope.sqlite3")
+    program_service = ProgramService(program_store)
+    campaign_service = CampaignService(campaign_store, program_store)
     app = FastAPI(
         title="AegisScope Control Plane",
         description="Authorization-first SRC orchestration / 授权优先的 SRC 编排",
@@ -154,11 +159,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def list_findings(limit: int = 100) -> list[dict[str, Any]]:
         return [item.model_dump(mode="json") for item in analyst_store.list_findings(limit)]
 
+    @app.post("/api/v1/programs")
+    def create_program(request: ProgramSpecCreateRequest) -> dict[str, Any]:
+        """Create an immutable structured rule snapshot; source_text is never persisted."""
+
+        try:
+            spec = program_service.create(request)
+        except ProgramSpecError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return spec.model_dump(mode="json")
+
+    @app.get("/api/v1/programs")
+    def list_programs(limit: int = 100) -> list[dict[str, Any]]:
+        return [item.model_dump(mode="json") for item in program_store.list(limit)]
+
+    @app.get("/api/v1/programs/{spec_id}")
+    def get_program(spec_id: str) -> dict[str, Any]:
+        spec = program_store.get(spec_id)
+        if spec is None:
+            raise HTTPException(status_code=404, detail="program spec not found")
+        return spec.model_dump(mode="json")
+
     @app.post("/api/v1/campaigns")
     def create_campaign(request: CampaignCreateRequest) -> dict[str, Any]:
         """Create a local planning campaign. This grants no target execution authority."""
 
-        campaign = campaign_service.create(request)
+        try:
+            campaign = campaign_service.create(request)
+        except CampaignServiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return campaign.model_dump(mode="json")
 
     @app.get("/api/v1/campaigns")
@@ -207,6 +236,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> dict[str, Any]:
         try:
             campaign = campaign_service.record_decision(campaign_id, request)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except CampaignServiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return campaign.model_dump(mode="json")
+
+    @app.post("/api/v1/campaigns/{campaign_id}/sync-jobs")
+    def sync_campaign_jobs(campaign_id: str) -> dict[str, Any]:
+        """Offline-only binding of local job summaries to their originating proposal."""
+
+        try:
+            campaign = campaign_service.sync_jobs(campaign_id, orchestrator.store.list_jobs(500))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except CampaignServiceError as exc:

@@ -26,6 +26,7 @@ class CampaignStatus(StrEnum):
     PLANNING = "planning"
     AWAITING_STAGE_AUTHORIZATION = "awaiting_stage_authorization"
     MANUAL_REVIEW = "manual_review"
+    RESULT_REVIEW = "result_review"
     COMPLETED = "completed"
     STOPPED = "stopped"
     BUDGET_EXHAUSTED = "budget_exhausted"
@@ -43,6 +44,7 @@ class HypothesisStatus(StrEnum):
     QUEUED = "queued"
     PROPOSED = "proposed"
     MANUAL_REVIEW = "manual_review"
+    RESULT_REVIEW = "result_review"
     SUPPORTED = "supported"
     REJECTED = "rejected"
     DUPLICATE = "duplicate"
@@ -52,6 +54,7 @@ class HypothesisStatus(StrEnum):
 class NextActionKind(StrEnum):
     AUTHORIZE_STAGE = "authorize_stage"
     MANUAL_REVIEW = "manual_review"
+    REVIEW_RESULT = "review_result"
     IMPORT_TRAFFIC = "import_traffic"
     NONE = "none"
 
@@ -79,6 +82,9 @@ class CampaignCreateRequest(CampaignModel):
     objective: str = Field(min_length=8, max_length=2000)
     max_stages: int = Field(default=5, ge=1, le=10)
     max_total_requests: int = Field(default=50, ge=1, le=100)
+    program_spec_id: str | None = Field(
+        default=None, pattern=r"^program-[a-f0-9]{16}$"
+    )
 
     @field_validator("target_host")
     @classmethod
@@ -169,6 +175,52 @@ class CampaignNextAction(CampaignModel):
     network_executed: Literal[False] = False
 
 
+class ExecutionLinkStatus(StrEnum):
+    PREPARED = "prepared"
+    DISPATCHING = "dispatching"
+    EVIDENCE_TRANSFER_FAILED = "evidence_transfer_failed"
+    EVIDENCE_READY = "evidence_ready"
+    OFFLINE_ANALYZED = "offline_analyzed"
+    STOPPED = "stopped"
+    FAILED = "failed"
+
+
+class CampaignExecutionLink(CampaignModel):
+    binding_id: str = Field(pattern=r"^binding-[a-f0-9]{16}$")
+    hypothesis_id: str = Field(pattern=r"^hyp-[a-f0-9]{16}$")
+    proposal_id: str = Field(min_length=8, max_length=80)
+    proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    job_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{7,79}$")
+    manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: ExecutionLinkStatus
+    stage_status: str | None = Field(default=None, max_length=40)
+    actual_requests: int = Field(default=0, ge=0, le=20)
+    stop_reason: str | None = Field(default=None, max_length=1000)
+    candidate_count: int = Field(default=0, ge=0)
+    observation_count: int = Field(default=0, ge=0)
+    safety_stop_count: int = Field(default=0, ge=0)
+    summary_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    budget_counted: bool = False
+    review_recommendation: Literal[
+        "supported", "rejected", "duplicate", "exhausted"
+    ] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def require_link_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("execution link timestamps must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def validate_link_time(self) -> CampaignExecutionLink:
+        if self.updated_at < self.created_at:
+            raise ValueError("execution link updated_at cannot be before created_at")
+        return self
+
+
 class Campaign(CampaignModel):
     schema_version: Literal[1] = 1
     campaign_id: str = Field(pattern=r"^campaign-[a-f0-9]{16}$")
@@ -176,11 +228,16 @@ class Campaign(CampaignModel):
     objective: str = Field(min_length=8, max_length=2000)
     status: CampaignStatus
     target_host: str
+    program_spec_id: str | None = Field(
+        default=None, pattern=r"^program-[a-f0-9]{16}$"
+    )
+    program_spec_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     allowlist: list[str] = Field(min_length=1, max_length=100)
     denylist: list[str] = Field(default_factory=list, max_length=100)
     budget: CampaignBudget
     source_analysis_ids: list[str] = Field(default_factory=list, max_length=20)
     hypotheses: list[CampaignHypothesis] = Field(default_factory=list, max_length=200)
+    execution_links: list[CampaignExecutionLink] = Field(default_factory=list, max_length=50)
     next_action: CampaignNextAction
     created_at: datetime
     updated_at: datetime
@@ -216,4 +273,7 @@ class Campaign(CampaignModel):
             raise ValueError("updated_at cannot be before created_at")
         if any(item.host != self.target_host for item in self.hypotheses):
             raise ValueError("all hypotheses must match the exact campaign target")
+        hypothesis_ids = {item.hypothesis_id for item in self.hypotheses}
+        if any(item.hypothesis_id not in hypothesis_ids for item in self.execution_links):
+            raise ValueError("execution links must belong to a campaign hypothesis")
         return self
